@@ -43,7 +43,7 @@ This MCP server enables AI agents to manage tasks, track project progress, and b
 | Tool | Description |
 |------|-------------|
 | `parse_prd` | Parse a PRD document and create structured tasks |
-| `expand_task` | Break down a task into subtasks — inline mode or file mode with parent-child references |
+| `expand_task` | Break down a task into subtasks — file mode (default) or inline mode |
 | `estimate_task_complexity` | Estimate task complexity (low/medium/high) and time requirements |
 | `suggest_next_actions` | Get AI-powered suggestions for next actions on a task |
 | `generate_task_file` | Generate a source file template based on a task description |
@@ -91,6 +91,11 @@ Each task follows the standard Task File Template:
 - **Estimate:** 8 hours
 
 ## Status: ToDo
+
+## Log
+### 2026-07-27 — Analyze → Implementation
+- Transition validation: ✅ PASS
+- Note: Ready to code
 
 ## Description
 Task description text.
@@ -221,9 +226,21 @@ parse_prd(project_name: str, prd_content: str) -> str
 
 ### `update_task_status`
 
-Update the status of a task or subtask. Task statuses: `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`. Subtask statuses: `todo`, `done`.
+Update the status of a task or subtask. Every transition is logged in the task's `## Log` section with timestamp, validation result, and optional note.
 
-When a task is set to `Done` and it has a parent task, status propagation automatically checks whether all sibling tasks are also done and promotes the parent.
+**Task statuses:** `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`, `Canceled`
+**Subtask statuses:** `todo`, `done`
+
+**Transition flow:**
+```
+ToDo → Analyze → Implementation → In Review → Done
+            ▲                         │
+            └─────────────────────────┘
+                In Review → Analyze (rejected)
+Any → Canceled (terminal, dead end)
+```
+
+When a task reaches `Done` or `Canceled` and it has a parent, status propagation checks siblings and auto-promotes the parent.
 
 ```
 update_task_status(
@@ -231,6 +248,7 @@ update_task_status(
     task_title: str,
     subtask_title: Optional[str] = None,
     status: str = "done",
+    note: str = "",
 ) -> str
 ```
 
@@ -246,14 +264,14 @@ get_next_task(project_name: str) -> str
 
 Break down a task into smaller subtasks. Supports two modes:
 
-- **Inline mode** (`create_files=False`, default) — adds subtasks as checkboxes inside the same T-XXX.md file (backward compatible).
-- **File mode** (`create_files=True`) — creates independent T-XXX.md files for each subtask with parent-child references and configurable dependency chains.
+- **File mode** (`create_files=True`, default) — creates independent T-XXX.md files for each subtask with parent-child references and configurable dependency chains.
+- **Inline mode** (`create_files=False`) — adds subtasks as checkboxes inside the same T-XXX.md file (backward compatible).
 
 ```
 expand_task(
     project_name: str,
     task_title: str,
-    create_files: bool = False,
+    create_files: bool = True,
     mode: str = "parallel",
 ) -> str
 ```
@@ -326,6 +344,33 @@ List all tasks for a project, optionally filtered by status.
 list_tasks(project_name: str, status: Optional[str] = None) -> str
 ```
 
+### `get_task`
+
+Get full task data as JSON including description, criteria blocks, log entries, and dependencies.
+
+```
+get_task(project_name: str, task_title: str) -> str
+```
+
+### `update_task`
+
+Update task fields. Only non-empty fields are applied. Useful for patching description, priority, subtasks, or dependencies without changing status.
+
+```
+update_task(
+    project_name: str,
+    task_title: str,
+    description: str = "",
+    category: str = "",
+    priority: str = "",
+    complexity: str = "",
+    estimated_hours: int = 0,
+    dependencies: Optional[List[str]] = None,
+    subtasks: Optional[List[str]] = None,
+    subtask_statuses: Optional[List[str]] = None,
+) -> str
+```
+
 ## Task Expansion — Parent-Child References
 
 When `expand_task` is called with `create_files=True`, child tasks are created with:
@@ -333,7 +378,10 @@ When `expand_task` is called with `create_files=True`, child tasks are created w
 - **`parent_task_id`** — references the parent task
 - **`dependencies`** — depends on the parent (parallel) or previous sibling (chain)
 - Parent's **`child_task_ids`** — tracks all children (extended on re-expansion)
-- **Status propagation** — when all children are `Done`, the parent auto-promotes
+- **Log transition history** — every status change is recorded with timestamp and optional note
+- **Canceled status** — terminal status; canceled children unblock parent completion
+- **Status propagation** — Done/Canceled children auto-promote parent
+- **Transition validation** — enforces valid state flow (ToDo→Analyze→Implementation→In Review→Done/Analyze)
 
 Example after expanding T-001 with `create_files=True, mode="parallel"`:
 
@@ -356,10 +404,10 @@ This project provides a modular foundation for building task management MCP serv
 
 ```
 src/
-  main.py                     # Entry point + MCP tool registration (13 tools)
+  main.py                     # Entry point + MCP tool registration (15 tools)
   task_manager/
     __init__.py               # Public API exports
-    schema.py                 # Data models (ProjectMetadata, TaskData, Subtask, CriteriaBlock)
+    schema.py                 # Data models (ProjectMetadata, TaskData, Subtask, CriteriaBlock, LogEntry)
     task_file.py              # Individual T-XXX.md file reader/writer/parser
     project_manager.py        # Project-level CRUD + project.json metadata
     task_manager.py           # Per-project task CRUD + expand_to_files + status propagation

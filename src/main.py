@@ -323,15 +323,15 @@ def create_mcp() -> FastMCP:
     # ------------------------------------------------------------------
 
     @mcp.tool()
-    async def expand_task(ctx: Context, project_name: str, task_title: str, create_files: bool = False, mode: str = "parallel") -> str:
+    async def expand_task(ctx: Context, project_name: str, task_title: str, create_files: bool = True, mode: str = "parallel") -> str:
         """Break down a task into smaller subtasks using AI.
 
         Args:
             project_name: Name of the project
             task_title: Title or ID of the task to expand
-            create_files: If True, create separate T-XXX.md files for each subtask
-                          with parent-child references. If False (default), add
-                          inline subtasks to the existing task file.
+            create_files: If True (default), create separate T-XXX.md files
+                          for each subtask with parent-child references. If False,
+                          add inline subtasks to the existing task file.
             mode: Expansion mode when create_files=True — "parallel" (all children
                   depend on parent) or "chain" (sequential deps: A → B → C).
 

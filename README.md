@@ -31,7 +31,7 @@ This MCP server enables AI agents to manage tasks, track project progress, and b
 | Tool | Description |
 |------|-------------|
 | `parse_prd` | Parse a PRD document and create structured tasks |
-| `expand_task` | Break down a task into subtasks — inline mode or file mode with parent-child references |
+| `expand_task` | Break down a task into subtasks — file mode (default) or inline mode |
 | `estimate_task_complexity` | Estimate task complexity (low/medium/high) and time requirements |
 | `suggest_next_actions` | Get AI-powered suggestions for next actions on a task |
 | `generate_task_file` | Generate a source file template based on a task description |
@@ -252,14 +252,14 @@ get_next_task(project_name: str) -> str
 
 Break down a task into smaller subtasks. Supports two modes:
 
-- **Inline mode** (`create_files=False`, default) — adds subtasks as checkboxes inside the same T-XXX.md file (backward compatible).
-- **File mode** (`create_files=True`) — creates independent T-XXX.md files for each subtask with parent-child references and configurable dependency chains.
+- **File mode** (`create_files=True`, default) — creates independent T-XXX.md files for each subtask with parent-child references and configurable dependency chains.
+- **Inline mode** (`create_files=False`) — adds subtasks as checkboxes inside the same T-XXX.md file (backward compatible).
 
 ```
 expand_task(
     project_name: str,
     task_title: str,
-    create_files: bool = False,
+    create_files: bool = True,
     mode: str = "parallel",
 ) -> str
 ```

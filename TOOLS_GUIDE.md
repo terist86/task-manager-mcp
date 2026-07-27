@@ -73,14 +73,14 @@ Returns the first non-Done task, sorted by status priority.
 ### 6. `expand_task` ⭐
 Breaks a task into subtasks. **Two modes:**
 
-- **Inline** (`create_files=False`, default) — adds checkboxes to the same file
-- **File** (`create_files=True`) — creates independent T-XXX.md files with parent-child references
+- **File** (`create_files=True`, default) — creates independent T-XXX.md files with parent-child references
+- **Inline** (`create_files=False`) — adds checkboxes to the same file (backward compatible)
 
 | Param | Type | Required | Default |
 |-------|------|----------|---------|
 | `project_name` | `str` | yes | |
 | `task_title` | `str` | yes | |
-| `create_files` | `bool` | no | `False` |
+| `create_files` | `bool` | no | `True` |
 | `mode` | `str` | no | `"parallel"` |
 
 **Modes:** `"parallel"` (all children → parent), `"chain"` (sequential deps)
