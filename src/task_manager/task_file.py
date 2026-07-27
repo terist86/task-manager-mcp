@@ -33,7 +33,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from .schema import TaskData, Subtask, CriteriaBlock
+from .schema import TaskData, Subtask, CriteriaBlock, LogEntry
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +48,8 @@ _RE_INPUT = re.compile(r"^###\s+Input Criteria$", re.IGNORECASE)
 _RE_OUTPUT = re.compile(r"^###\s+Output Criteria.*$", re.IGNORECASE)
 _RE_CHECKBOX = re.compile(r"^-\s+\[(.)\]\s+(.+)$")
 _RE_DESC_START = re.compile(r"^##\s+Description$", re.IGNORECASE)
+_RE_LOG_START = re.compile(r"^##\s+Log$", re.IGNORECASE)
+_RE_LOG_ENTRY = re.compile(r"^###\s+(\d{4}-\d{2}-\d{2})\s*[—–-]\s*(.+?)\s*→\s*(.+)$")
 _RE_SUBTASK_START = re.compile(r"^###\s+Subtasks", re.IGNORECASE)
 
 _META_KEY_MAP: dict[str, str] = {
@@ -195,6 +197,21 @@ class TaskFile:
         lines.append(f"## Status: {task.status}")
         lines.append("")
 
+        # Log (transition history)
+        if task.log_entries:
+            lines.append("## Log")
+            for entry in task.log_entries:
+                suffix = ""
+                if entry.from_status == "In Review" and entry.to_status == "Implementation":
+                    suffix = " (rejected)"
+                lines.append(f"### {entry.timestamp[:10]} — {entry.from_status} → {entry.to_status}{suffix}")
+                if entry.validation_result:
+                    lines.append(f"- Transition validation: {entry.validation_result}")
+                if entry.note:
+                    for note_line in entry.note.split("\n"):
+                        lines.append(f"- {note_line}")
+            lines.append("")
+
         # Description
         if task.description.strip():
             lines.append("## Description")
@@ -244,7 +261,10 @@ class TaskFile:
         current_criteria: list[str] = []
         in_description = False
         in_subtasks = False
+        in_log = False
         description_lines: list[str] = []
+        current_log_entry: Optional[LogEntry] = None
+        log_note_lines: list[str] = []
 
         for line in lines:
             # Match title header: # T-001: Title
@@ -269,18 +289,59 @@ class TaskFile:
 
             # ## Description section
             if _RE_DESC_START.match(line):
+                _flush_log(task, current_log_entry, log_note_lines)
+                current_log_entry = None
+                log_note_lines = []
                 current_section = None
                 current_block = None
                 in_description = True
                 in_subtasks = False
+                in_log = False
                 continue
 
             # ## Subtasks section
             if _RE_SUBTASK_START.match(line):
+                _flush_log(task, current_log_entry, log_note_lines)
+                current_log_entry = None
+                log_note_lines = []
                 in_description = False
                 in_subtasks = True
+                in_log = False
                 current_section = None
                 current_block = None
+                continue
+
+            # ## Log section
+            if _RE_LOG_START.match(line):
+                in_description = False
+                in_subtasks = False
+                in_log = True
+                current_section = None
+                current_block = None
+                continue
+
+            # ### YYYY-MM-DD — From → To (log entry header)
+            m = _RE_LOG_ENTRY.match(line)
+            if m and in_log:
+                # Flush previous entry
+                if current_log_entry is not None:
+                    current_log_entry.note = "\n".join(log_note_lines).strip()
+                    task.log_entries.append(current_log_entry)
+                current_log_entry = LogEntry(
+                    timestamp=m.group(1).strip(),
+                    from_status=m.group(2).strip(),
+                    to_status=m.group(3).strip().replace(" (rejected)", ""),
+                )
+                log_note_lines = []
+                continue
+
+            # - Note: ... or - Transition validation: ... inside log entry
+            if in_log and current_log_entry is not None and line.strip().startswith("- "):
+                text = line.strip()[2:].strip()
+                if text.lower().startswith("transition validation:"):
+                    current_log_entry.validation_result = text.split(":", 1)[1].strip()
+                else:
+                    log_note_lines.append(text)
                 continue
 
             # ## Analyze / Implementation / In Review / Done
@@ -288,11 +349,15 @@ class TaskFile:
             if m:
                 # Flush previous criteria
                 _flush_criteria(task, current_section, current_block, current_criteria)
+                _flush_log(task, current_log_entry, log_note_lines)
+                current_log_entry = None
+                log_note_lines = []
                 current_section = m.group(1).lower().replace(" ", "_")
                 current_block = None
                 current_criteria = []
                 in_description = False
                 in_subtasks = False
+                in_log = False
                 continue
 
             # ### Input Criteria / ### Output Criteria
@@ -328,6 +393,10 @@ class TaskFile:
 
         # Flush remaining
         _flush_criteria(task, current_section, current_block, current_criteria)
+
+        if current_log_entry is not None:
+            current_log_entry.note = "\n".join(log_note_lines).strip()
+            task.log_entries.append(current_log_entry)
 
         if description_lines:
             task.description = "\n".join(description_lines).strip()
@@ -399,3 +468,14 @@ def _flush_criteria(
         existing.output_criteria.extend(criteria)
 
     setattr(task, attr_name, existing)
+
+
+def _flush_log(
+    task: TaskData,
+    entry: Optional[LogEntry],
+    note_lines: list[str],
+) -> None:
+    """Persist a pending log entry into *task*."""
+    if entry is not None:
+        entry.note = "\n".join(note_lines).strip()
+        task.log_entries.append(entry)

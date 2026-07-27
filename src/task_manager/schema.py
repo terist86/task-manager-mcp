@@ -68,6 +68,28 @@ class Subtask:
 # ---------------------------------------------------------------------------
 
 @dataclass
+class LogEntry:
+    """A single transition log entry (stored in the ``## Log`` section)."""
+
+    timestamp: str = field(default_factory=_now_iso)
+    from_status: str = ""
+    to_status: str = ""
+    note: str = ""
+    validation_result: str = "✅ PASS"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LogEntry":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+# ---------------------------------------------------------------------------
+# Criteria blocks (for Analyze / Implementation / In Review sections)
+# ---------------------------------------------------------------------------
+
+@dataclass
 class CriteriaBlock:
     """Checklist block for a phase section."""
     input_criteria: List[str] = field(default_factory=list)
@@ -121,6 +143,9 @@ class TaskData:
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
 
+    # Transition log
+    log_entries: List[LogEntry] = field(default_factory=list)
+
     # Helpers -----------------------------------------------------------
 
     STATUS_ORDER: Dict[str, int] = field(default_factory=lambda: {
@@ -129,6 +154,7 @@ class TaskData:
         "Implementation": 2,
         "In Review": 3,
         "Done": 4,
+        "Canceled": 5,
     }, repr=False, compare=False)
 
     @property
@@ -155,6 +181,8 @@ class TaskData:
                 continue
             if key == "subtasks" and isinstance(value, list):
                 kwargs[key] = [Subtask.from_dict(s) for s in value]
+            elif key == "log_entries" and isinstance(value, list):
+                kwargs[key] = [LogEntry.from_dict(e) for e in value]
             elif key in ("analyze", "implementation", "in_review", "done"):
                 kwargs[key] = CriteriaBlock.from_dict(value) if isinstance(value, dict) else value
             else:

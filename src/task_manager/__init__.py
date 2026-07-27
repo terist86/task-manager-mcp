@@ -1,6 +1,6 @@
 """Task Manager — multi-project directory-based task storage for MCP."""
 
-from .schema import ProjectMetadata, TaskData, Subtask, CriteriaBlock
+from .schema import ProjectMetadata, TaskData, Subtask, CriteriaBlock, LogEntry
 from .task_file import TaskFile
 from .project_manager import ProjectManager
 from .task_manager import TaskManager
@@ -11,6 +11,7 @@ __all__ = [
     "TaskData",
     "Subtask",
     "CriteriaBlock",
+    "LogEntry",
     "TaskFile",
     "ProjectManager",
     "TaskManager",

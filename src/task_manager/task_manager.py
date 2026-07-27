@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, List, Optional
 
-from .schema import TaskData, Subtask
+from .schema import TaskData, Subtask, LogEntry
 from .task_file import TaskFile
 
 
@@ -122,18 +122,67 @@ class TaskManager:
         TaskFile(self._task_path(task_id)).write(task)
         return task
 
-    def update_task_status(
-        self, task_id: str, new_status: str
-    ) -> Optional[TaskData]:
-        """Shorthand to update only the ``status`` field.
+    VALID_TRANSITIONS: dict[str, set[str]] = {
+        "ToDo":          {"Analyze"},
+        "Analyze":       {"Implementation"},
+        "Implementation": {"In Review"},
+        "In Review":     {"Done", "Implementation"},
+        "Done":          set(),
+        "Canceled":      set(),
+    }
 
-        If *new_status* is ``"Done"`` and the task has a parent,
-        automatically propagates the status check upward.
+    def update_task_status(
+        self, task_id: str, new_status: str, note: str = ""
+    ) -> Optional[TaskData]:
+        """Update task status with transition logging.
+
+        Logs the old→new transition with timestamp and optional *note*.
+        ``Canceled`` is a terminal status that allows a parent to become
+        ``Done`` even though the child is not.
+
+        If *new_status* is ``"Done"`` or ``"Canceled"`` and the task has
+        a parent, automatically propagates the status check upward.
         """
-        result = self.update_task(task_id, status=new_status)
-        if result and new_status == "Done" and result.parent_task_id:
-            self._propagate_to_parent(result.parent_task_id)
-        return result
+        task = self.get_task(task_id)
+        if task is None:
+            return None
+
+        old_status = task.status
+
+        # No-op: same status
+        if old_status == new_status:
+            return task
+
+        # Determine validation result
+        allowed = self.VALID_TRANSITIONS.get(old_status, set())
+        if new_status in allowed:
+            result = "✅ PASS"
+        elif new_status == "Canceled":
+            result = "✅ PASS (canceled)"
+        elif old_status == "In Review" and new_status == "Implementation":
+            result = "✅ PASS (rejected)"
+        else:
+            result = "⚠️ UNKNOWN"
+
+        # Append log entry
+        from datetime import datetime, timezone
+        task.log_entries.append(LogEntry(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            from_status=old_status,
+            to_status=new_status,
+            note=note,
+            validation_result=result,
+        ))
+
+        # Update status
+        task.status = new_status
+        TaskFile(self._task_path(task_id)).write(task)
+
+        # Propagate: Done or Canceled → check parent
+        if new_status in ("Done", "Canceled") and task.parent_task_id:
+            self._propagate_to_parent(task.parent_task_id)
+
+        return task
 
     # ------------------------------------------------------------------
     # Task expansion into separate files
@@ -201,7 +250,7 @@ class TaskManager:
         return children
 
     def _propagate_to_parent(self, parent_id: str) -> None:
-        """Check if all children of *parent_id* are Done; if so, promote parent.
+        """Check if all children are Done or Canceled; if so, promote parent.
 
         Recurses upward through the hierarchy.
         """
@@ -209,15 +258,17 @@ class TaskManager:
         if parent is None or not parent.child_task_ids:
             return
 
-        all_done = True
+        all_resolved = True
         for child_id in parent.child_task_ids:
             child = self.get_task(child_id)
-            if child is None or child.status != "Done":
-                all_done = False
+            if child is None:
+                continue
+            if child.status not in ("Done", "Canceled"):
+                all_resolved = False
                 break
 
-        if all_done and parent.status != "Done":
-            self.update_task(parent_id, status="Done")
+        if all_resolved and parent.status != "Done":
+            self.update_task_status(parent_id, "Done", note="All children resolved (Done or Canceled)")
             if parent.parent_task_id:
                 self._propagate_to_parent(parent.parent_task_id)
 
@@ -230,11 +281,11 @@ class TaskManager:
         return False
 
     def get_next_task(self) -> Optional[TaskData]:
-        """Return the first task that is not ``Done``."""
-        status_order = {"ToDo": 0, "Analyze": 1, "Implementation": 2, "In Review": 3, "Done": 4}
+        """Return the first task that is not ``Done`` or ``Canceled``."""
+        status_order = {"ToDo": 0, "Analyze": 1, "Implementation": 2, "In Review": 3, "Done": 4, "Canceled": 5}
         active: List[TaskData] = []
         for task in self.list_tasks():
-            if task.status != "Done":
+            if task.status not in ("Done", "Canceled"):
                 active.append(task)
         if not active:
             return None

@@ -239,14 +239,20 @@ def create_mcp() -> FastMCP:
         task_title: str,
         subtask_title: Optional[str] = None,
         status: str = "done",
+        note: str = "",
     ) -> str:
         """Update the status of a task or subtask.
+
+        Every transition is logged with a timestamp in the task's Log section.
+        ``Canceled`` is a terminal status — a canceled child allows its parent
+        to become Done.
 
         Args:
             project_name: Name of the project
             task_title: Title or ID of the task (e.g. "T-001")
             subtask_title: Optional title of the subtask
-            status: New status (todo/done for subtasks; ToDo/Analyze/Implementation/In Review/Done for tasks)
+            status: New status (todo/done for subtasks; ToDo/Analyze/Implementation/In Review/Done/Canceled for tasks)
+            note: Optional note for the transition log entry
 
         Returns:
             Confirmation message
@@ -266,7 +272,9 @@ def create_mcp() -> FastMCP:
                     return f"Subtask '{subtask_title}' not found in task '{task.id}'"
                 return f"Updated subtask '{subtask_title}' to {status} in task {task.id}"
             else:
-                tm.update_task_status(task.id, status)
+                tm.update_task_status(task.id, status, note=note)
+                if note:
+                    return f"Updated task '{task.id}' status to {status} (note: {note})"
                 return f"Updated task '{task.id}' status to {status}"
         except Exception as e:
             return f"Error updating status: {str(e)}"
