@@ -656,6 +656,116 @@ if __name__ == "__main__":
         except Exception as e:
             return f"Error listing tasks: {str(e)}"
 
+    # ------------------------------------------------------------------
+    # Tool 14: get_task
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    async def get_task(ctx: Context, project_name: str, task_title: str) -> str:
+        """Get full task data as JSON including description, criteria blocks, and log.
+
+        Args:
+            project_name: Name of the project
+            task_title: Title or ID of the task (e.g. "T-001")
+
+        Returns:
+            JSON string with full TaskData (all fields)
+        """
+        try:
+            if not pm.project_exists(project_name):
+                return json.dumps({"error": f"Project '{project_name}' not found"})
+
+            tm = _get_tm(project_name)
+            task = _find_task_by_title(tm, task_title)
+            if task is None:
+                return json.dumps({"error": f"Task '{task_title}' not found"})
+
+            data = task.to_dict()
+            # Convert subtasks to simple dicts
+            data["subtasks"] = [s.to_dict() for s in task.subtasks]
+            # Convert criteria blocks
+            for key in ("analyze", "implementation", "in_review", "done"):
+                if data.get(key):
+                    data[key] = data[key].to_dict() if hasattr(data[key], 'to_dict') else data[key]
+            # Convert log entries
+            data["log_entries"] = [e.to_dict() for e in task.log_entries]
+            return json.dumps(data, indent=2, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    # ------------------------------------------------------------------
+    # Tool 15: update_task
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    async def update_task(
+        ctx: Context,
+        project_name: str,
+        task_title: str,
+        description: str = "",
+        category: str = "",
+        priority: str = "",
+        complexity: str = "",
+        estimated_hours: int = 0,
+        dependencies: Optional[List[str]] = None,
+        subtasks: Optional[List[str]] = None,
+        subtask_statuses: Optional[List[str]] = None,
+    ) -> str:
+        """Update task fields. Only non-empty fields are applied.
+
+        Args:
+            project_name: Name of the project
+            task_title: Title or ID of the task
+            description: New description
+            category: New category (e.g. "[MVP]")
+            priority: New priority (P0-P3)
+            complexity: Complexity estimate (low/medium/high)
+            estimated_hours: Estimated hours
+            dependencies: List of dependency task IDs
+            subtasks: List of subtask titles (replaces existing)
+            subtask_statuses: Matching list of statuses (todo/done) for subtasks
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            if not pm.project_exists(project_name):
+                return f"Project '{project_name}' not found"
+
+            tm = _get_tm(project_name)
+            task = _find_task_by_title(tm, task_title)
+            if task is None:
+                return f"Task '{task_title}' not found"
+
+            updates = {}
+            if description:
+                updates["description"] = description
+            if category:
+                updates["category"] = category
+            if priority:
+                updates["priority"] = priority
+            if complexity:
+                updates["complexity"] = complexity
+            if estimated_hours:
+                updates["estimated_hours"] = estimated_hours
+            if dependencies is not None:
+                updates["dependencies"] = dependencies
+            if subtasks is not None:
+                from task_manager.schema import Subtask
+                statuses = subtask_statuses or ["todo"] * len(subtasks)
+                updates["subtasks"] = [
+                    Subtask(title=s, status=statuses[i] if i < len(statuses) else "todo")
+                    for i, s in enumerate(subtasks)
+                ]
+
+            if not updates:
+                return "No fields to update"
+
+            tm.update_task(task.id, **updates)
+            return f"Updated task '{task.id}': {', '.join(updates.keys())}"
+        except Exception as e:
+            return f"Error updating task: {str(e)}"
+
     return mcp
 
 
