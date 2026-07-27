@@ -361,15 +361,28 @@ update_task(
 
 ## Task Expansion — Parent-Child References
 
-When `expand_task` is called with `create_files=True`, child tasks are created with:
+When `expand_task` is called with `create_files=True` (the default), child tasks are created as **fully independent tasks** — each goes through the complete lifecycle:
 
-- **`parent_task_id`** — references the parent task
-- **`dependencies`** — depends on the parent (parallel) or previous sibling (chain)
-- Parent's **`child_task_ids`** — tracks all children (extended on re-expansion)
-- **Log transition history** — every status change is recorded with timestamp and optional note
-- **Canceled status** — terminal status; canceled children unblock parent completion
-- **Status propagation** — Done/Canceled children auto-promote parent
-- **Transition validation** — enforces valid state flow (ToDo→Analyze→Implementation→In Review→Done/Analyze)
+```
+Parent: T-001 (ToDo)
+    │ expand_task(create_files=True, mode="parallel")
+    ├── T-002 (ToDo) → Analyze → Implementation → In Review → Done
+    └── T-003 (ToDo) → Analyze → Implementation → In Review → Done
+                                          ↓
+                              Parent auto-promoted to Done
+```
+
+Each child:
+- Starts at **ToDo** status — must be analyzed, implemented, and reviewed
+- Has **`parent_task_id`** — references the parent task
+- Has **`dependencies`** — depends on the parent (parallel) or previous sibling (chain)
+- Is **independent** — siblings don't block each other (parallel mode)
+- Can be **Canceled** — won't block parent completion
+
+The parent:
+- Tracks children via **`child_task_ids`** (extended on re-expansion)
+- **Waits** until all children are Done or Canceled
+- Is **auto-promoted** to Done via status propagation
 
 Example after expanding T-001 with `create_files=True, mode="parallel"`:
 
