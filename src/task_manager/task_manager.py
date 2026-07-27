@@ -126,7 +126,7 @@ class TaskManager:
         "ToDo":          {"Analyze"},
         "Analyze":       {"Implementation"},
         "Implementation": {"In Review"},
-        "In Review":     {"Done", "Implementation"},
+        "In Review":     {"Done"},
         "Done":          set(),
         "Canceled":      set(),
     }
@@ -159,7 +159,7 @@ class TaskManager:
             result = "✅ PASS"
         elif new_status == "Canceled":
             result = "✅ PASS (canceled)"
-        elif old_status == "In Review" and new_status == "Implementation":
+        elif old_status == "In Review" and new_status == "Analyze":
             result = "✅ PASS (rejected)"
         else:
             result = "⚠️ UNKNOWN"

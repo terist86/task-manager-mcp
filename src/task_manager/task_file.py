@@ -202,7 +202,7 @@ class TaskFile:
             lines.append("## Log")
             for entry in task.log_entries:
                 suffix = ""
-                if entry.from_status == "In Review" and entry.to_status == "Implementation":
+                if entry.from_status == "In Review" and entry.to_status == "Analyze":
                     suffix = " (rejected)"
                 lines.append(f"### {entry.timestamp[:10]} — {entry.from_status} → {entry.to_status}{suffix}")
                 if entry.validation_result:
