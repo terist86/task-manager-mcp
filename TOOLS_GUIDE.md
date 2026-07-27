@@ -1,241 +1,191 @@
-# Task Master Tools Implementation Guide
+# Task Manager MCP — Tools Reference
 
-## 1. Understanding Task Master Structure
+## Architecture
 
-The Task Master repository (`claude-task-master`) is organized into several key directories:
+The server stores data in a directory-based structure under `projects/`:
 
 ```
-├── mcp-server/          # MCP server implementation
-├── tasks/              # Task-related tools
-├── context/            # Context management
-├── scripts/            # Utility scripts
-└── docs/               # Documentation
+projects/
+  <project-name>/
+    project.json              # Metadata: name, path, language, build_system, description
+    tasks/
+      T-001.md                # Individual task file (Task File Template format)
+      T-002.md
 ```
 
-## 2. Core Tool Categories
+Source code is modularized under `src/task_manager/`:
 
-Based on the repository, we can create tools in these categories:
+| Module | Responsibility |
+|--------|---------------|
+| `schema.py` | `ProjectMetadata`, `TaskData`, `Subtask`, `CriteriaBlock` dataclasses |
+| `task_file.py` | `TaskFile` — read/write/parse individual T-XXX.md files |
+| `project_manager.py` | `ProjectManager` — project CRUD + project.json |
+| `task_manager.py` | `TaskManager` — per-project task CRUD + `expand_to_files` + status propagation |
+| `migration.py` | `MigrationTool` — convert old tasks/*.md to projects/ structure |
 
-### 2.1 Task Management Tools
+---
 
-```python
-@mcp.tool()
-async def create_task(ctx: Context, title: str, description: str, priority: str = "medium") -> str:
-    """Create a new task in the task management system.
-    
-    Args:
-        title: The title of the task
-        description: Detailed description of the task
-        priority: Task priority (low, medium, high)
-        
-    Returns:
-        Confirmation message with task ID
-    """
-    # Implementation
+## All 13 MCP Tools
+
+### 1. `create_task_file`
+Creates a project directory with `project.json` and `tasks/` subdirectory.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+
+### 2. `add_task`
+Adds a new task with an auto-assigned `T-XXX` ID.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `title` | `str` | yes |
+| `description` | `str` | yes |
+| `subtasks` | `List[str]` | no |
+| `batch_mode` | `bool` | no |
+
+### 3. `parse_prd`
+Parses a PRD markdown document and creates structured tasks.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `prd_content` | `str` | yes |
+
+### 4. `update_task_status`
+Updates task or subtask status. **Task statuses:** `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`. **Subtask statuses:** `todo`, `done`. Automatically triggers status propagation when child reaches Done.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `task_title` | `str` | yes (title or ID, e.g. "T-001") |
+| `subtask_title` | `str` | no |
+| `status` | `str` | default: `"done"` |
+
+### 5. `get_next_task`
+Returns the first non-Done task, sorted by status priority.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+
+### 6. `expand_task` ⭐
+Breaks a task into subtasks. **Two modes:**
+
+- **Inline** (`create_files=False`, default) — adds checkboxes to the same file
+- **File** (`create_files=True`) — creates independent T-XXX.md files with parent-child references
+
+| Param | Type | Required | Default |
+|-------|------|----------|---------|
+| `project_name` | `str` | yes | |
+| `task_title` | `str` | yes | |
+| `create_files` | `bool` | no | `False` |
+| `mode` | `str` | no | `"parallel"` |
+
+**Modes:** `"parallel"` (all children → parent), `"chain"` (sequential deps)
+
+### 7. `generate_task_file`
+Generates a source file template from a task description.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `task_title` | `str` | yes |
+
+### 8. `get_task_dependencies`
+Returns all tasks that list the given task in their `Dependencies`.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `task_title` | `str` | yes |
+
+### 9. `estimate_task_complexity`
+Heuristic complexity estimate (low/medium/high) based on description length and subtask count.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `task_title` | `str` | yes |
+
+### 10. `suggest_next_actions`
+Returns a list of suggested next actions for a task.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `task_title` | `str` | yes |
+
+### 11. `list_projects`
+Lists all registered projects with their metadata (name, language, description, timestamps).
+
+No parameters.
+
+### 12. `update_project`
+Updates project metadata. Only non-empty fields are applied.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `language` | `str` | no |
+| `build_system` | `str` | no |
+| `description` | `str` | no |
+| `path` | `str` | no |
+
+### 13. `list_tasks`
+Lists all tasks for a project, optionally filtered by status.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `status` | `str` | no (ToDo/Analyze/Implementation/In Review/Done) |
+
+---
+
+## Task File Template
+
+Every `T-XXX.md` follows this format:
+
+```markdown
+# T-001: Task Title
+
+## Metadata
+- **ID:** T-001
+- **Phase:** 1
+- **Dependencies:** T-002
+- **Parent Task:** T-000
+- **Child Tasks:** T-003, T-004
+- **Estimate:** 8 hours
+
+## Status: ToDo
+
+## Analyze
+### Input Criteria
+- [ ] ...
+### Output Criteria (-> Implementation)
+- [ ] ...
+
+## Implementation
+...
+
+## In Review
+...
+
+## Done
+- [ ] Task completed
+
+### Subtasks
+- [ ] Subtask 1
 ```
 
-### 2.2 PRD (Product Requirements Document) Tools
+---
 
-```python
-@mcp.tool()
-async def parse_prd(ctx: Context, prd_content: str) -> str:
-    """Parse a Product Requirements Document and extract tasks.
-    
-    Args:
-        prd_content: The content of the PRD
-        
-    Returns:
-        List of extracted tasks and requirements
-    """
-    # Implementation
-```
+## Parent-Child Task References
 
-### 2.3 Task Status Tools
+When using `expand_task(create_files=True)`:
 
-```python
-@mcp.tool()
-async def update_task_status(ctx: Context, task_id: str, status: str) -> str:
-    """Update the status of a task.
-    
-    Args:
-        task_id: The ID of the task to update
-        status: New status (todo, in_progress, done)
-        
-    Returns:
-        Confirmation message
-    """
-    # Implementation
-```
-
-## 3. Implementation Guide
-
-### 3.1 Basic Tool Structure
-
-```python
-from mcp.server.fastmcp import FastMCP, Context
-from typing import Optional
-
-mcp = FastMCP(
-    "task-master",
-    description="Task management system for AI-driven development",
-    host=os.getenv("HOST", "0.0.0.0"),
-    port=os.getenv("PORT", "8050")
-)
-
-@mcp.tool()
-async def your_tool_name(ctx: Context, param1: str, param2: Optional[str] = None) -> str:
-    """Tool description
-    
-    Args:
-        param1: Description
-        param2: Optional description
-        
-    Returns:
-        Result description
-    """
-    try:
-        # Implementation
-        return "Result"
-    except Exception as e:
-        return f"Error: {str(e)}"
-```
-
-### 3.2 Required Dependencies
-
-Add these to your `pyproject.toml`:
-
-```toml
-[project]
-dependencies = [
-    "mcp[cli]>=1.3.0",
-    "python-dotenv>=1.0.0",
-    "anthropic>=0.8.0",  # For Claude API
-    "openai>=1.0.0"      # For Perplexity API (optional)
-]
-```
-
-### 3.3 Environment Variables
-
-Create a `.env` file with:
-
-```env
-ANTHROPIC_API_KEY=your_claude_api_key
-PERPLEXITY_API_KEY=your_perplexity_api_key  # Optional
-MODEL=claude-3-7-sonnet-20250219
-PERPLEXITY_MODEL=sonar-pro
-MAX_TOKENS=64000
-TEMPERATURE=0.2
-DEFAULT_SUBTASKS=5
-DEFAULT_PRIORITY=medium
-```
-
-## 4. Example Tool Implementations
-
-### 4.1 Task Creation Tool
-
-```python
-@mcp.tool()
-async def create_task(ctx: Context, title: str, description: str, priority: str = "medium") -> str:
-    """Create a new task in the task management system.
-    
-    Args:
-        title: The title of the task
-        description: Detailed description of the task
-        priority: Task priority (low, medium, high)
-        
-    Returns:
-        Confirmation message with task ID
-    """
-    try:
-        # Generate unique task ID
-        task_id = f"task_{int(time.time())}"
-        
-        # Create task object
-        task = {
-            "id": task_id,
-            "title": title,
-            "description": description,
-            "priority": priority,
-            "status": "todo",
-            "created_at": datetime.now().isoformat()
-        }
-        
-        # Store task (implement your storage logic)
-        # store_task(task)
-        
-        return f"Task created successfully with ID: {task_id}"
-    except Exception as e:
-        return f"Error creating task: {str(e)}"
-```
-
-### 4.2 PRD Parser Tool
-
-```python
-@mcp.tool()
-async def parse_prd(ctx: Context, prd_content: str) -> str:
-    """Parse a Product Requirements Document and extract tasks.
-    
-    Args:
-        prd_content: The content of the PRD
-        
-    Returns:
-        List of extracted tasks and requirements
-    """
-    try:
-        # Use Claude API to parse PRD
-        # Implement PRD parsing logic
-        
-        return "Parsed tasks and requirements"
-    except Exception as e:
-        return f"Error parsing PRD: {str(e)}"
-```
-
-## 5. Testing Your Tools
-
-1. Start your MCP server:
-   ```bash
-   uv run src/main.py
-   ```
-
-2. Test with an MCP client:
-   ```json
-   {
-     "mcpServers": {
-       "taskmaster": {
-         "transport": "sse",
-         "url": "http://localhost:8050/sse"
-       }
-     }
-   }
-   ```
-
-## 6. Best Practices
-
-1. **Error Handling**
-   - Always use try-except blocks
-   - Return meaningful error messages
-   - Log errors appropriately
-
-2. **Documentation**
-   - Document all parameters
-   - Include examples in docstrings
-   - Keep documentation up to date
-
-3. **Type Hints**
-   - Use proper type hints
-   - Include Optional types where appropriate
-   - Document complex types
-
-4. **Async Operations**
-   - Use async/await properly
-   - Handle concurrent operations safely
-   - Use appropriate async libraries
-
-## 7. Next Steps
-
-1. Implement basic task management tools
-2. Add PRD parsing capabilities
-3. Create task status management
-4. Add task prioritization
-5. Implement task dependencies
-6. Add task search and filtering 
+- Each child gets `parent_task_id` and a `Dependencies` entry
+- Parent's `child_task_ids` is **extended** on re-expansion (preserves existing children)
+- Marking a child `Done` triggers `_propagate_to_parent()` — if all siblings are Done, parent auto-promotes
+- Propagation is recursive up the entire hierarchy

@@ -1,190 +1,152 @@
 # Task Manager MCP Server
 
-A template implementation of the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for managing tasks and projects. This server provides a comprehensive task management system with support for project organization, task tracking, and PRD parsing.
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for multi-project task management with directory-based storage. Provides a comprehensive task management system with support for project organization, task tracking, PRD parsing, and AI-assisted task expansion.
 
 ## Overview
 
-This project demonstrates how to build an MCP server that enables AI agents to manage tasks, track project progress, and break down Product Requirements Documents (PRDs) into actionable tasks. It serves as a practical template for creating your own MCP servers with task management capabilities.
-
-The implementation follows the best practices laid out by Anthropic for building MCP servers, allowing seamless integration with any MCP-compatible client.
+This MCP server enables AI agents to manage tasks, track project progress, and break down tasks into independent subtask files. Each project is stored as a directory under `projects/` with its own metadata (`project.json`) and individual task files (`tasks/T-XXX.md`) following the standard Task File Template.
 
 ## Features
 
-The server provides several essential task management tools:
+### Project Management
 
-1. **Task Management**
-   - `create_task_file`: Create new project task files
-   - `add_task`: Add tasks to projects with descriptions and subtasks
-   - `update_task_status`: Update the status of tasks and subtasks
-   - `get_next_task`: Get the next uncompleted task from a project
+| Tool | Description |
+|------|-------------|
+| `create_task_file` | Create a new project directory with metadata and a `tasks/` subdirectory |
+| `list_projects` | List all registered projects with metadata |
+| `update_project` | Update project metadata (language, build system, description, path) |
 
-2. **Project Planning**
-   - `parse_prd`: Convert PRDs into structured tasks automatically
-   - `expand_task`: Break down tasks into smaller, manageable subtasks
-   - `estimate_task_complexity`: Estimate task complexity and time requirements
-   - `get_task_dependencies`: Track task dependencies
+### Task Management
 
-3. **Development Support**
-   - `generate_task_file`: Generate file templates based on task descriptions
-   - `suggest_next_actions`: Get AI-powered suggestions for next steps
+| Tool | Description |
+|------|-------------|
+| `add_task` | Add a new task to a project (auto-assigned T-XXX ID) |
+| `list_tasks` | List all tasks for a project, optionally filtered by status |
+| `update_task_status` | Update the status of a task or subtask |
+| `get_next_task` | Get the next uncompleted task from a project |
+| `get_task_dependencies` | Get all tasks that depend on a given task |
+
+### AI-Assisted Planning
+
+| Tool | Description |
+|------|-------------|
+| `parse_prd` | Parse a PRD document and create structured tasks |
+| `expand_task` | Break down a task into subtasks — inline mode or file mode with parent-child references |
+| `estimate_task_complexity` | Estimate task complexity (low/medium/high) and time requirements |
+| `suggest_next_actions` | Get AI-powered suggestions for next actions on a task |
+| `generate_task_file` | Generate a source file template based on a task description |
+
+## Data Structure
+
+```
+projects/
+  <project-name>/
+    project.json              # Project metadata
+    tasks/
+      T-001.md                # Individual task file
+      T-002.md
+      ...
+```
+
+### Project Metadata (`project.json`)
+
+```json
+{
+  "name": "my-project",
+  "path": "/home/user/my-project",
+  "language": "python",
+  "build_system": "uv",
+  "description": "Description of the project",
+  "created_at": "2026-07-27T10:00:00Z",
+  "updated_at": "2026-07-27T10:00:00Z"
+}
+```
+
+### Task File Format (`T-XXX.md`)
+
+Each task follows the standard Task File Template:
+
+```markdown
+# T-001: Task Title
+
+## Metadata
+- **ID:** T-001
+- **Priority:** P0
+- **Dependencies:** T-002
+- **Parent Task:** T-000
+- **Child Tasks:** T-003, T-004
+- **Complexity:** medium
+- **Estimate:** 8 hours
+
+## Status: ToDo
+
+## Description
+Task description text.
+
+## Analyze
+### Input Criteria
+- [ ] ...
+### Output Criteria (-> Implementation)
+- [ ] ...
+
+## Implementation
+...
+
+## In Review
+...
+
+## Done
+- [ ] Task completed
+
+### Subtasks
+- [ ] Subtask 1
+- [x] Subtask 2
+```
 
 ## Prerequisites
 
 - Python 3.12+
-- API keys for your chosen LLM provider (OpenAI, OpenRouter, or Ollama)
-- Docker if running the MCP server as a container (recommended)
+- Docker (optional, for containerized deployment)
 
 ## Installation
 
 ### Using uv
 
-1. Install uv if you don't have it:
-   ```bash
-   pip install uv
-   ```
-
-2. Clone this repository:
-   ```bash
-   git clone https://github.com/coleam00/mcp-mem0.git
-   cd mcp-mem0
-   ```
-
-3. Install dependencies:
-   ```bash
-   uv pip install -e .
-   ```
-
-4. Create a `.env` file based on `.env.example`:
-   ```bash
-   cp .env.example .env
-   ```
-
-5. Configure your environment variables in the `.env` file (see Configuration section)
-
-### Using Docker (Recommended)
-
-1. Build the Docker image:
-   ```bash
-   docker build -t mcp/mem0 --build-arg PORT=8050 .
-   ```
-
-2. Create a `.env` file based on `.env.example` and configure your environment variables
-
-## Configuration
-
-The following environment variables can be configured in your `.env` file:
-
-| Variable | Description | Example |
-|----------|-------------|----------|
-| `TRANSPORT` | Transport protocol (sse or stdio) | `sse` |
-| `HOST` | Host to bind to when using SSE transport | `0.0.0.0` |
-| `PORT` | Port to listen on when using SSE transport | `8050` |
-
-## Running the Server
-
-### Using Python 3
-
 ```bash
-# Set TRANSPORT=sse in .env then:
-python3 src/main.py
+pip install uv
+git clone <repository-url>
+cd task-manager-mcp
+uv pip install -e .
+cp .env.example .env
 ```
-
-The server will start on the configured host and port (default: http://0.0.0.0:8050).
 
 ### Using Docker
 
 ```bash
-docker build -t task-manager-mcp .
-docker run --env-file .env -p 8050:8050 task-manager-mcp
+docker build -t task-manager-mcp --build-arg PORT=8050 .
 ```
 
-## Using the Task Manager
+## Configuration
 
-### Creating a New Project
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TRANSPORT` | Transport protocol (`sse` or `stdio`) | `sse` |
+| `HOST` | Host for SSE transport | `0.0.0.0` |
+| `PORT` | Port for SSE transport | `8050` |
 
-1. Create a task file for your project:
-```python
-await mcp.create_task_file(project_name="my-project")
+## Running the Server
+
+```bash
+# Using Python
+source .venv/bin/activate && python src/main.py
+
+# Using Docker
+docker compose up -d
 ```
 
-2. Add tasks to your project:
-```python
-await mcp.add_task(
-    project_name="my-project",
-    title="Setup Development Environment",
-    description="Configure the development environment with required tools",
-    subtasks=[
-        "Install dependencies",
-        "Configure linters",
-        "Set up testing framework"
-    ]
-)
-```
+## MCP Client Configuration
 
-3. Parse a PRD to create tasks automatically:
-```python
-await mcp.parse_prd(
-    project_name="my-project",
-    prd_content="# Your PRD content..."
-)
-```
-
-### Managing Tasks
-
-1. Update task status:
-```python
-await mcp.update_task_status(
-    project_name="my-project",
-    task_title="Setup Development Environment",
-    subtask_title="Install dependencies",
-    status="done"
-)
-```
-
-2. Get the next task to work on:
-```python
-next_task = await mcp.get_next_task(project_name="my-project")
-```
-
-3. Expand a task into subtasks:
-```python
-await mcp.expand_task(
-    project_name="my-project",
-    task_title="Implement Authentication"
-)
-```
-
-### Development Workflow
-
-1. Generate a file template for a task:
-```python
-await mcp.generate_task_file(
-    project_name="my-project",
-    task_title="User Authentication"
-)
-```
-
-2. Get task complexity estimate:
-```python
-complexity = await mcp.estimate_task_complexity(
-    project_name="my-project",
-    task_title="User Authentication"
-)
-```
-
-3. Get suggestions for next actions:
-```python
-suggestions = await mcp.suggest_next_actions(
-    project_name="my-project",
-    task_title="User Authentication"
-)
-```
-
-## Integration with MCP Clients
-
-### SSE Configuration
-
-To connect to the server using SSE transport, use this configuration:
+### SSE
 
 ```json
 {
@@ -197,9 +159,7 @@ To connect to the server using SSE transport, use this configuration:
 }
 ```
 
-### Stdio Configuration
-
-For stdio transport, use this configuration:
+### Stdio
 
 ```json
 {
@@ -207,22 +167,189 @@ For stdio transport, use this configuration:
     "task-manager": {
       "command": "python3",
       "args": ["src/main.py"],
-      "env": {
-        "TRANSPORT": "stdio",
-        "LLM_PROVIDER": "openai",
-        "LLM_API_KEY": "YOUR-API-KEY",
-        "LLM_CHOICE": "gpt-4"
-      }
+      "env": { "TRANSPORT": "stdio" }
     }
   }
 }
 ```
 
+## Tool Reference
+
+All tools return string messages suitable for display to the user.
+
+### `create_task_file`
+
+Create a new project directory with metadata and a `tasks/` subdirectory.
+
+```
+create_task_file(project_name: str) -> str
+```
+
+### `add_task`
+
+Add a new task to a project. Auto-assigns the next T-XXX ID.
+
+```
+add_task(
+    project_name: str,
+    title: str,
+    description: str,
+    subtasks: Optional[List[str]] = None,
+    batch_mode: bool = False,
+) -> str
+```
+
+### `parse_prd`
+
+Parse a PRD document and create structured tasks from its sections.
+
+```
+parse_prd(project_name: str, prd_content: str) -> str
+```
+
+### `update_task_status`
+
+Update the status of a task or subtask. Task statuses: `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`. Subtask statuses: `todo`, `done`.
+
+When a task is set to `Done` and it has a parent task, status propagation automatically checks whether all sibling tasks are also done and promotes the parent.
+
+```
+update_task_status(
+    project_name: str,
+    task_title: str,
+    subtask_title: Optional[str] = None,
+    status: str = "done",
+) -> str
+```
+
+### `get_next_task`
+
+Get the next uncompleted task from a project (sorted by status priority).
+
+```
+get_next_task(project_name: str) -> str
+```
+
+### `expand_task`
+
+Break down a task into smaller subtasks. Supports two modes:
+
+- **Inline mode** (`create_files=False`, default) — adds subtasks as checkboxes inside the same T-XXX.md file (backward compatible).
+- **File mode** (`create_files=True`) — creates independent T-XXX.md files for each subtask with parent-child references and configurable dependency chains.
+
+```
+expand_task(
+    project_name: str,
+    task_title: str,
+    create_files: bool = False,
+    mode: str = "parallel",
+) -> str
+```
+
+**Modes (file mode only):**
+- `"parallel"` — all children depend on the parent task only
+- `"chain"` — sequential dependencies (T-003 → T-004 → T-005)
+
+### `generate_task_file`
+
+Generate a source file template based on a task's description.
+
+```
+generate_task_file(project_name: str, task_title: str) -> str
+```
+
+### `get_task_dependencies`
+
+Get all tasks that list the given task in their dependencies.
+
+```
+get_task_dependencies(project_name: str, task_title: str) -> str
+```
+
+### `estimate_task_complexity`
+
+Estimate task complexity using heuristic analysis of description length and subtask count.
+
+```
+estimate_task_complexity(project_name: str, task_title: str) -> str
+```
+
+Returns JSON: `{"task_id": "T-001", "task": "...", "complexity": "medium", "estimated_hours": 8}`
+
+### `suggest_next_actions`
+
+Get AI-powered suggestions for the next steps on a task.
+
+```
+suggest_next_actions(project_name: str, task_title: str) -> str
+```
+
+### `list_projects`
+
+List all registered projects with their metadata.
+
+```
+list_projects() -> str
+```
+
+### `update_project`
+
+Update metadata fields for an existing project. Only non-empty fields are applied.
+
+```
+update_project(
+    project_name: str,
+    language: str = "",
+    build_system: str = "",
+    description: str = "",
+    path: str = "",
+) -> str
+```
+
+### `list_tasks`
+
+List all tasks for a project, optionally filtered by status.
+
+```
+list_tasks(project_name: str, status: Optional[str] = None) -> str
+```
+
+## Task Expansion — Parent-Child References
+
+When `expand_task` is called with `create_files=True`, child tasks are created with:
+
+- **`parent_task_id`** — references the parent task
+- **`dependencies`** — depends on the parent (parallel) or previous sibling (chain)
+- Parent's **`child_task_ids`** — tracks all children (extended on re-expansion)
+- **Status propagation** — when all children are `Done`, the parent auto-promotes
+
+Example after expanding T-001 with `create_files=True, mode="parallel"`:
+
+```
+T-001 (Parent)     Child Tasks: T-002, T-003
+  T-002 (Child)    Parent Task: T-001, Dependencies: T-001
+  T-003 (Child)    Parent Task: T-001, Dependencies: T-001
+```
+
 ## Building Your Own Server
 
-This template provides a foundation for building more complex task management MCP servers. To extend it:
+This project provides a modular foundation for building task management MCP servers. To extend it:
 
-1. Add new task management tools using the `@mcp.tool()` decorator
-2. Implement custom task analysis and automation features
-3. Add project-specific task templates and workflows
-4. Integrate with your existing development tools and processes
+1. Add new data models in `src/task_manager/schema.py`
+2. Add file I/O logic in `src/task_manager/task_file.py`
+3. Implement CRUD operations in `src/task_manager/task_manager.py`
+4. Register new MCP tools in `src/main.py` using `@mcp.tool()`
+
+### Package Structure
+
+```
+src/
+  main.py                     # Entry point + MCP tool registration (13 tools)
+  task_manager/
+    __init__.py               # Public API exports
+    schema.py                 # Data models (ProjectMetadata, TaskData, Subtask, CriteriaBlock)
+    task_file.py              # Individual T-XXX.md file reader/writer/parser
+    project_manager.py        # Project-level CRUD + project.json metadata
+    task_manager.py           # Per-project task CRUD + expand_to_files + status propagation
+    migration.py              # Old flat-file → new directory-based migration
+```
