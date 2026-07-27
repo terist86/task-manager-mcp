@@ -25,7 +25,7 @@ Source code is modularized under `src/task_manager/`:
 
 ---
 
-## All 13 MCP Tools
+## All 15 MCP Tools
 
 ### 1. `create_task_file`
 Creates a project directory with `project.json` and `tasks/` subdirectory.
@@ -139,7 +139,31 @@ Lists all tasks for a project, optionally filtered by status.
 | Param | Type | Required |
 |-------|------|----------|
 | `project_name` | `str` | yes |
-| `status` | `str` | no (ToDo/Analyze/Implementation/In Review/Done) |
+| `status` | `str` | no (ToDo/Analyze/Implementation/In Review/Done/Canceled) |
+
+### 14. `get_task`
+Returns full task data as JSON including description, criteria blocks, log entries, and all metadata.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `task_title` | `str` | yes |
+
+### 15. `update_task`
+Patches task fields. Only non-empty fields are applied.
+
+| Param | Type | Required |
+|-------|------|----------|
+| `project_name` | `str` | yes |
+| `task_title` | `str` | yes |
+| `description` | `str` | no |
+| `category` | `str` | no |
+| `priority` | `str` | no (P0-P3) |
+| `complexity` | `str` | no (low/medium/high) |
+| `estimated_hours` | `int` | no |
+| `dependencies` | `List[str]` | no |
+| `subtasks` | `List[str]` | no (replaces existing) |
+| `subtask_statuses` | `List[str]` | no (todo/done, matches subtasks) |
 
 ---
 

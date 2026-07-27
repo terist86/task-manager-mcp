@@ -332,6 +332,33 @@ List all tasks for a project, optionally filtered by status.
 list_tasks(project_name: str, status: Optional[str] = None) -> str
 ```
 
+### `get_task`
+
+Get full task data as JSON including description, criteria blocks, log entries, and dependencies.
+
+```
+get_task(project_name: str, task_title: str) -> str
+```
+
+### `update_task`
+
+Update task fields. Only non-empty fields are applied. Useful for patching description, priority, subtasks, or dependencies without changing status.
+
+```
+update_task(
+    project_name: str,
+    task_title: str,
+    description: str = "",
+    category: str = "",
+    priority: str = "",
+    complexity: str = "",
+    estimated_hours: int = 0,
+    dependencies: Optional[List[str]] = None,
+    subtasks: Optional[List[str]] = None,
+    subtask_statuses: Optional[List[str]] = None,
+) -> str
+```
+
 ## Task Expansion — Parent-Child References
 
 When `expand_task` is called with `create_files=True`, child tasks are created with:
@@ -365,7 +392,7 @@ This project provides a modular foundation for building task management MCP serv
 
 ```
 src/
-  main.py                     # Entry point + MCP tool registration (13 tools)
+  main.py                     # Entry point + MCP tool registration (15 tools)
   task_manager/
     __init__.py               # Public API exports
     schema.py                 # Data models (ProjectMetadata, TaskData, Subtask, CriteriaBlock, LogEntry)
