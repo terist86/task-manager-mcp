@@ -80,6 +80,11 @@ Each task follows the standard Task File Template:
 
 ## Status: ToDo
 
+## Log
+### 2026-07-27 — Analyze → Implementation
+- Transition validation: ✅ PASS
+- Note: Ready to code
+
 ## Description
 Task description text.
 
@@ -209,9 +214,21 @@ parse_prd(project_name: str, prd_content: str) -> str
 
 ### `update_task_status`
 
-Update the status of a task or subtask. Task statuses: `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`. Subtask statuses: `todo`, `done`.
+Update the status of a task or subtask. Every transition is logged in the task's `## Log` section with timestamp, validation result, and optional note.
 
-When a task is set to `Done` and it has a parent task, status propagation automatically checks whether all sibling tasks are also done and promotes the parent.
+**Task statuses:** `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`, `Canceled`
+**Subtask statuses:** `todo`, `done`
+
+**Transition flow:**
+```
+ToDo → Analyze → Implementation → In Review → Done
+            ▲                         │
+            └─────────────────────────┘
+                In Review → Analyze (rejected)
+Any → Canceled (terminal, dead end)
+```
+
+When a task reaches `Done` or `Canceled` and it has a parent, status propagation checks siblings and auto-promotes the parent.
 
 ```
 update_task_status(
@@ -219,6 +236,7 @@ update_task_status(
     task_title: str,
     subtask_title: Optional[str] = None,
     status: str = "done",
+    note: str = "",
 ) -> str
 ```
 
@@ -321,7 +339,10 @@ When `expand_task` is called with `create_files=True`, child tasks are created w
 - **`parent_task_id`** — references the parent task
 - **`dependencies`** — depends on the parent (parallel) or previous sibling (chain)
 - Parent's **`child_task_ids`** — tracks all children (extended on re-expansion)
-- **Status propagation** — when all children are `Done`, the parent auto-promotes
+- **Log transition history** — every status change is recorded with timestamp and optional note
+- **Canceled status** — terminal status; canceled children unblock parent completion
+- **Status propagation** — Done/Canceled children auto-promote parent
+- **Transition validation** — enforces valid state flow (ToDo→Analyze→Implementation→In Review→Done/Analyze)
 
 Example after expanding T-001 with `create_files=True, mode="parallel"`:
 
@@ -347,7 +368,7 @@ src/
   main.py                     # Entry point + MCP tool registration (13 tools)
   task_manager/
     __init__.py               # Public API exports
-    schema.py                 # Data models (ProjectMetadata, TaskData, Subtask, CriteriaBlock)
+    schema.py                 # Data models (ProjectMetadata, TaskData, Subtask, CriteriaBlock, LogEntry)
     task_file.py              # Individual T-XXX.md file reader/writer/parser
     project_manager.py        # Project-level CRUD + project.json metadata
     task_manager.py           # Per-project task CRUD + expand_to_files + status propagation
