@@ -107,6 +107,10 @@ class TaskData:
     status: str = "ToDo"  # ToDo | Analyze | Implementation | In Review | Done
     subtasks: List[Subtask] = field(default_factory=list)
 
+    # Parent-child task references (for expand_task file-mode)
+    parent_task_id: Optional[str] = None  # e.g. "T-001"
+    child_task_ids: List[str] = field(default_factory=list)  # e.g. ["T-003", "T-004"]
+
     # Per-phase criteria blocks
     analyze: Optional[CriteriaBlock] = None
     implementation: Optional[CriteriaBlock] = None

@@ -1,5 +1,5 @@
-"""MCP server entry point — registers all 10 task-management tools.
-
+"""MCP server entry point — registers all 13 task-management tools.
+ 
 Rewritten to use the new ``src/task_manager/`` package (ProjectManager,
 TaskManager) instead of the old monolithic ``task_manager.py``.
 """
@@ -315,15 +315,20 @@ def create_mcp() -> FastMCP:
     # ------------------------------------------------------------------
 
     @mcp.tool()
-    async def expand_task(ctx: Context, project_name: str, task_title: str) -> str:
+    async def expand_task(ctx: Context, project_name: str, task_title: str, create_files: bool = False, mode: str = "parallel") -> str:
         """Break down a task into smaller subtasks using AI.
 
         Args:
             project_name: Name of the project
             task_title: Title or ID of the task to expand
+            create_files: If True, create separate T-XXX.md files for each subtask
+                          with parent-child references. If False (default), add
+                          inline subtasks to the existing task file.
+            mode: Expansion mode when create_files=True — "parallel" (all children
+                  depend on parent) or "chain" (sequential deps: A → B → C).
 
         Returns:
-            Confirmation message with new subtasks
+            Confirmation message with new subtask IDs (file mode) or count (inline mode)
         """
         try:
             if not pm.project_exists(project_name):
@@ -334,22 +339,35 @@ def create_mcp() -> FastMCP:
             if task is None:
                 return f"Task '{task_title}' not found in '{project_name}'"
 
-            # Generate expansion subtasks
-            new_subtitles = [
-                "Research existing solutions",
-                "Design implementation approach",
-                "Write initial code",
-                "Test functionality",
-                "Review and refine",
-            ]
+            if create_files:
+                # File-mode: create independent T-XXX.md files
+                new_titles = [
+                    f"{task.title} — Part {i+1}"
+                    for i in range(3)
+                ]
+                children = tm.expand_to_files(task.id, new_titles, mode=mode)
+                child_ids = [c.id for c in children]
+                return (
+                    f"Expanded task '{task.id}' into {len(children)} files ({mode} mode): "
+                    f"{', '.join(child_ids)}"
+                )
+            else:
+                # Inline mode: add subtasks to the same file (backward compatible)
+                new_subtitles = [
+                    "Research existing solutions",
+                    "Design implementation approach",
+                    "Write initial code",
+                    "Test functionality",
+                    "Review and refine",
+                ]
 
-            from task_manager.schema import Subtask
-            for st_title in new_subtitles:
-                if not any(s.title == st_title for s in task.subtasks):
-                    task.subtasks.append(Subtask(title=st_title, status="todo"))
+                from task_manager.schema import Subtask
+                for st_title in new_subtitles:
+                    if not any(s.title == st_title for s in task.subtasks):
+                        task.subtasks.append(Subtask(title=st_title, status="todo"))
 
-            tm.update_task(task.id, subtasks=task.subtasks)
-            return f"Expanded task '{task.id}' with {len(new_subtitles)} new subtasks"
+                tm.update_task(task.id, subtasks=task.subtasks)
+                return f"Expanded task '{task.id}' with {len(new_subtitles)} inline subtasks"
         except Exception as e:
             return f"Error expanding task: {str(e)}"
 
@@ -510,6 +528,125 @@ if __name__ == "__main__":
             })
         except Exception as e:
             return f"Error suggesting actions: {str(e)}"
+
+    # ------------------------------------------------------------------
+    # Tool 11: list_projects
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    async def list_projects(ctx: Context) -> str:
+        """List all registered projects.
+
+        Returns:
+            JSON array of project metadata objects (name, language, description, created_at, etc.)
+        """
+        try:
+            projects = pm.list_projects()
+            result = [
+                {
+                    "name": p.name,
+                    "language": p.language,
+                    "description": p.description,
+                    "created_at": p.created_at,
+                    "updated_at": p.updated_at,
+                }
+                for p in projects
+            ]
+            if not result:
+                return "No projects found"
+            return json.dumps(result, indent=2, ensure_ascii=False)
+        except Exception as e:
+            return f"Error listing projects: {str(e)}"
+
+    # ------------------------------------------------------------------
+    # Tool 12: update_project
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    async def update_project(
+        ctx: Context,
+        project_name: str,
+        language: str = "",
+        build_system: str = "",
+        description: str = "",
+        path: str = "",
+    ) -> str:
+        """Update metadata for an existing project.
+
+        Args:
+            project_name: Name of the project
+            language: Programming language (e.g. "C++20", "python")
+            build_system: Build system (e.g. "cmake", "uv")
+            description: Project description
+            path: Path to the project on disk
+
+        Returns:
+            Confirmation message with updated fields
+        """
+        try:
+            if not pm.project_exists(project_name):
+                return f"Project '{project_name}' not found"
+
+            updates = {}
+            if language:
+                updates["language"] = language
+            if build_system:
+                updates["build_system"] = build_system
+            if description:
+                updates["description"] = description
+            if path:
+                updates["path"] = path
+
+            if not updates:
+                return "No fields to update"
+
+            pm.update_project(project_name, **updates)
+            return f"Updated project '{project_name}': {json.dumps(updates)}"
+        except Exception as e:
+            return f"Error updating project: {str(e)}"
+
+    # ------------------------------------------------------------------
+    # Tool 13: list_tasks
+    # ------------------------------------------------------------------
+
+    @mcp.tool()
+    async def list_tasks(
+        ctx: Context,
+        project_name: str,
+        status: Optional[str] = None,
+    ) -> str:
+        """List all tasks for a project, optionally filtered by status.
+
+        Args:
+            project_name: Name of the project
+            status: Optional status filter (ToDo/Analyze/Implementation/In Review/Done)
+
+        Returns:
+            JSON array of task objects (id, title, status, priority, category)
+        """
+        try:
+            if not pm.project_exists(project_name):
+                return f"Project '{project_name}' not found"
+
+            tm = _get_tm(project_name)
+            tasks = tm.list_tasks(status=status)
+            if not tasks:
+                return "No tasks found"
+            result = [
+                {
+                    "id": t.id,
+                    "title": t.title,
+                    "status": t.status,
+                    "priority": t.priority,
+                    "category": t.category,
+                    "subtasks_total": len(t.subtasks),
+                    "subtasks_done": sum(1 for s in t.subtasks if s.status == "done"),
+                }
+                for t in tasks
+            ]
+            return json.dumps(result, indent=2, ensure_ascii=False)
+        except Exception as e:
+            return f"Error listing tasks: {str(e)}"
 
     return mcp
 

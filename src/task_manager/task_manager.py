@@ -125,8 +125,101 @@ class TaskManager:
     def update_task_status(
         self, task_id: str, new_status: str
     ) -> Optional[TaskData]:
-        """Shorthand to update only the ``status`` field."""
-        return self.update_task(task_id, status=new_status)
+        """Shorthand to update only the ``status`` field.
+
+        If *new_status* is ``"Done"`` and the task has a parent,
+        automatically propagates the status check upward.
+        """
+        result = self.update_task(task_id, status=new_status)
+        if result and new_status == "Done" and result.parent_task_id:
+            self._propagate_to_parent(result.parent_task_id)
+        return result
+
+    # ------------------------------------------------------------------
+    # Task expansion into separate files
+    # ------------------------------------------------------------------
+
+    def expand_to_files(
+        self,
+        parent_id: str,
+        titles: List[str],
+        mode: str = "parallel",
+        descriptions: Optional[List[str]] = None,
+    ) -> List[TaskData]:
+        """Split *parent_id* into N child task files with auto-assigned IDs.
+
+        Args:
+            parent_id: The task to split (e.g. ``"T-001"``).
+            titles: Titles for each child task.
+            mode: ``"parallel"`` (all children depend on parent only)
+                  or ``"chain"`` (sequential: T-003 → T-004 → T-005).
+            descriptions: Optional descriptions for each child (same length as *titles*).
+
+        Returns:
+            List of created child :class:`TaskData`.
+
+        Raises:
+            ValueError: If parent task not found or mode is invalid.
+        """
+        parent = self.get_task(parent_id)
+        if parent is None:
+            raise ValueError(f"Parent task '{parent_id}' not found in '{self.project_name}'")
+        if mode not in ("parallel", "chain"):
+            raise ValueError(f"Invalid mode '{mode}'. Use 'parallel' or 'chain'.")
+        if not titles:
+            raise ValueError("At least one child title is required.")
+
+        children: List[TaskData] = []
+        child_ids: List[str] = []
+
+        for idx, title in enumerate(titles):
+            desc = descriptions[idx] if descriptions and idx < len(descriptions) else ""
+            child = self.create_task(
+                title=title,
+                description=desc,
+                priority=parent.priority,
+                category=parent.category,
+            )
+            child.parent_task_id = parent_id
+
+            if mode == "parallel":
+                child.dependencies = [parent_id]
+            elif mode == "chain":
+                if idx == 0:
+                    child.dependencies = [parent_id]
+                else:
+                    child.dependencies = [child_ids[-1]]
+
+            self.update_task(child.id, parent_task_id=child.parent_task_id, dependencies=child.dependencies)
+            children.append(child)
+            child_ids.append(child.id)
+
+        # Update parent with child references (extend, not replace)
+        parent.child_task_ids.extend(child_ids)
+        self.update_task(parent_id, child_task_ids=parent.child_task_ids)
+
+        return children
+
+    def _propagate_to_parent(self, parent_id: str) -> None:
+        """Check if all children of *parent_id* are Done; if so, promote parent.
+
+        Recurses upward through the hierarchy.
+        """
+        parent = self.get_task(parent_id)
+        if parent is None or not parent.child_task_ids:
+            return
+
+        all_done = True
+        for child_id in parent.child_task_ids:
+            child = self.get_task(child_id)
+            if child is None or child.status != "Done":
+                all_done = False
+                break
+
+        if all_done and parent.status != "Done":
+            self.update_task(parent_id, status="Done")
+            if parent.parent_task_id:
+                self._propagate_to_parent(parent.parent_task_id)
 
     def delete_task(self, task_id: str) -> bool:
         """Remove a ``T-XXX.md`` file."""

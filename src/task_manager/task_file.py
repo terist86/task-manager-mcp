@@ -54,6 +54,8 @@ _META_KEY_MAP: dict[str, str] = {
     "id":            "id",
     "phase":         "phase",
     "dependencies":  "dependencies",
+    "parent task":   "parent_task_id",
+    "child tasks":   "child_task_ids",
     "estimate":      "estimated_hours",
     "category":      "category",
     "priority":      "priority",
@@ -176,6 +178,11 @@ class TaskFile:
         if task.dependencies:
             deps = ", ".join(task.dependencies)
             lines.append(f"- **Dependencies:** {deps}")
+        if task.parent_task_id:
+            lines.append(f"- **Parent Task:** {task.parent_task_id}")
+        if task.child_task_ids:
+            children = ", ".join(task.child_task_ids)
+            lines.append(f"- **Child Tasks:** {children}")
         if task.complexity:
             lines.append(f"- **Complexity:** {task.complexity}")
         if task.estimated_hours:
@@ -356,6 +363,8 @@ def _set_meta(task: TaskData, key: str, value: str) -> None:
     mapped = _META_KEY_MAP.get(key, key)
     if mapped == "dependencies":
         task.dependencies = [d.strip() for d in value.split(",") if d.strip()]
+    elif mapped == "child_task_ids":
+        task.child_task_ids = [d.strip() for d in value.split(",") if d.strip()]
     elif mapped == "estimated_hours":
         try:
             # Accept both "4 hours" format and integer
