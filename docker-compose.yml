@@ -1,0 +1,13 @@
+services:
+  task-manager:
+    build: .
+    container_name: task-manager-mcp
+    restart: unless-stopped
+    ports:
+      - "8050:8050"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8050
+      - TRANSPORT=sse
+    volumes:
+      - ./projects:/app/projects

@@ -4,10 +4,9 @@ ARG PORT=8050
 
 WORKDIR /app
 
-# Install system dependencies and PyYAML
+# Install system dependencies (needed for building Python packages with C extensions)
 RUN apt-get update && apt-get install -y \
     build-essential \
-    python3-yaml \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv
@@ -17,7 +16,6 @@ RUN pip install uv
 COPY . .
 
 # Install dependencies
-RUN pip install PyYAML
 RUN uv pip install --system -e .
 
 EXPOSE ${PORT}
