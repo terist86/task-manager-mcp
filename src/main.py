@@ -243,7 +243,7 @@ def create_mcp() -> FastMCP:
     ) -> str:
         """Update the status of a task or subtask.
 
-        Every transition is logged with a timestamp in the task's Log section.
+        Every transition is logged with a timestamp in the task's log_entries.
         ``Canceled`` is a terminal status — a canceled child allows its parent
         to become Done.
 
@@ -251,7 +251,7 @@ def create_mcp() -> FastMCP:
             project_name: Name of the project
             task_title: Title or ID of the task (e.g. "T-001")
             subtask_title: Optional title of the subtask
-            status: New status (todo/done for subtasks; ToDo/Analyze/Implementation/In Review/Done/Canceled for tasks)
+            status: New status (todo/done for subtasks; ToDo/In Progress/Analyze/Implementation/In Review/Done/Canceled for tasks)
             note: Optional note for the transition log entry
 
         Returns:
@@ -329,7 +329,7 @@ def create_mcp() -> FastMCP:
         Args:
             project_name: Name of the project
             task_title: Title or ID of the task to expand
-            create_files: If True (default), create separate T-XXX.md files
+            create_files: If True (default), create separate T-XXX.json files
                           for each subtask with parent-child references. If False,
                           add inline subtasks to the existing task file.
             mode: Expansion mode when create_files=True — "parallel" (all children
@@ -349,7 +349,7 @@ def create_mcp() -> FastMCP:
                 return f"Task '{task_title}' not found in '{project_name}'"
 
             if create_files:
-                # File-mode: create independent T-XXX.md files
+                # File-mode: create independent T-XXX.json files
                 if not subtask_titles:
                     subtask_titles = [
                         f"{task.title} — Part {i+1}"

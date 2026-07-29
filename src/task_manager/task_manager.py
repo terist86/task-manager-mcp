@@ -1,6 +1,6 @@
 """Per-project task CRUD operations.
 
-Operates on individual ``T-XXX.md`` files within a single project's
+Operates on individual ``T-XXX.json`` files within a single project's
 ``projects/<name>/tasks/`` directory.
 """
 
@@ -45,7 +45,7 @@ class TaskManager:
         complexity: str = "",
         estimated_hours: int = 0,
     ) -> TaskData:
-        """Create a new ``T-XXX.md`` file with an auto-assigned ID."""
+        """Create a new ``T-XXX.json`` file with an auto-assigned ID."""
         task_id = TaskFile.get_next_id(self.tasks_dir)
         task = TaskData(
             id=task_id,
@@ -63,7 +63,7 @@ class TaskManager:
         return task
 
     def get_task(self, task_id: str) -> Optional[TaskData]:
-        """Read a single ``T-XXX.md`` file."""
+        """Read a single ``T-XXX.json`` file."""
         p = self._task_path(task_id)
         if not p.is_file():
             return None
@@ -326,7 +326,7 @@ class TaskManager:
         return children
 
     def delete_task(self, task_id: str) -> bool:
-        """Remove a ``T-XXX.md`` file."""
+        """Remove a ``T-XXX.json`` file."""
         p = self._task_path(task_id)
         if p.is_file():
             p.unlink()
@@ -350,7 +350,7 @@ class TaskManager:
         return [t for t in self.list_tasks() if task_id in t.dependencies]
 
     def get_task_count(self) -> int:
-        """Return the number of ``T-*.md`` files in the project."""
+        """Return the number of ``T-*.json`` files in the project."""
         return len(self._all_task_files())
 
     # ------------------------------------------------------------------
@@ -363,8 +363,4 @@ class TaskManager:
     def _all_task_files(self) -> List[Path]:
         if not self.tasks_dir.is_dir():
             return []
-        # Support both .json (primary) and .md (migration coexistence)
-        files = sorted(self.tasks_dir.glob("T-*.json"))
-        if not files:
-            files = sorted(self.tasks_dir.glob("T-*.md"))
-        return files
+        return sorted(self.tasks_dir.glob("T-*.json"))

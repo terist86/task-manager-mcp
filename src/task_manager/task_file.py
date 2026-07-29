@@ -76,15 +76,6 @@ class TaskFile:
                         max_num = num
                 except ValueError:
                     pass
-        # Also check .md files (migration coexistence)
-        if tasks_dir.is_dir():
-            for p in tasks_dir.glob("T-*.md"):
-                try:
-                    num = int(p.stem.split("-", 1)[-1])
-                    if num > max_num:
-                        max_num = num
-                except ValueError:
-                    pass
         return f"T-{max_num + 1:03d}"
 
 

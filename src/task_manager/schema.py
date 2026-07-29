@@ -70,7 +70,7 @@ class Subtask:
 
 @dataclass
 class LogEntry:
-    """A single transition log entry (stored in the ``## Log`` section)."""
+    """A single transition log entry (stored in the ``log_entries`` array)."""
 
     timestamp: str = field(default_factory=_now_iso)
     from_status: str = ""
@@ -110,12 +110,12 @@ class CriteriaBlock:
 
 
 # ---------------------------------------------------------------------------
-# Task data (mapped to a single T-XXX.md file)
+# Task data (mapped to a single T-XXX.json file)
 # ---------------------------------------------------------------------------
 
 @dataclass
 class TaskData:
-    """Full representation of a single ``T-XXX.md`` task file.
+    """Full representation of a single ``T-XXX.json`` task file.
 
     Compatible with the Task File Template specification.
     """
