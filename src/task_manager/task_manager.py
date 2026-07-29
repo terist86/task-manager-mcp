@@ -123,7 +123,8 @@ class TaskManager:
         return task
 
     VALID_TRANSITIONS: dict[str, set[str]] = {
-        "ToDo":          {"Analyze"},
+        "ToDo":          {"Analyze", "In Progress"},
+        "In Progress":   {"Analyze", "Implementation", "In Review"},
         "Analyze":       {"Implementation"},
         "Implementation": {"In Review"},
         "In Review":     {"Done"},
@@ -178,11 +179,53 @@ class TaskManager:
         task.status = new_status
         TaskFile(self._task_path(task_id)).write(task)
 
-        # Propagate: Done or Canceled → check parent
-        if new_status in ("Done", "Canceled") and task.parent_task_id:
-            self._propagate_to_parent(task.parent_task_id)
+        # Sync parent status based on all children
+        if task.parent_task_id:
+            self._sync_parent_status(task.parent_task_id)
 
         return task
+
+    # ------------------------------------------------------------------
+    # Parent status automation
+    # ------------------------------------------------------------------
+
+    def _sync_parent_status(self, parent_id: str) -> None:
+        """Derive parent status from its children.
+
+        Rules:
+        - All children ToDo → parent = ToDo
+        - Any child active (not Done/Canceled) → parent = In Progress
+        - All children Done → parent = Done
+        - All children Canceled → parent = Canceled
+        - Mixed Done + Canceled, none active → parent = Done
+        """
+        parent = self.get_task(parent_id)
+        if parent is None or not parent.child_task_ids:
+            return
+
+        statuses = set()
+        for child_id in parent.child_task_ids:
+            child = self.get_task(child_id)
+            if child is None:
+                continue
+            statuses.add(child.status)
+
+        # Determine target status
+        if not statuses:
+            return  # no children found
+        if statuses == {"ToDo"}:
+            target = "ToDo"
+        elif statuses == {"Done"}:
+            target = "Done"
+        elif statuses == {"Canceled"}:
+            target = "Canceled"
+        elif statuses - {"Done", "Canceled"}:  # any active children
+            target = "In Progress"
+        else:  # mix of Done + Canceled only
+            target = "Done"
+
+        if parent.status != target:
+            self.update_task_status(parent_id, target, note="Parent status synced from children")
 
     # ------------------------------------------------------------------
     # Task expansion into separate files
@@ -208,11 +251,13 @@ class TaskManager:
             List of created child :class:`TaskData`.
 
         Raises:
-            ValueError: If parent task not found or mode is invalid.
+            ValueError: If parent task not found, mode is invalid, or parent is Done/Canceled.
         """
         parent = self.get_task(parent_id)
         if parent is None:
             raise ValueError(f"Parent task '{parent_id}' not found in '{self.project_name}'")
+        if parent.status in ("Done", "Canceled"):
+            raise ValueError(f"Cannot expand '{parent_id}' — task is {parent.status}")
         if mode not in ("parallel", "chain"):
             raise ValueError(f"Invalid mode '{mode}'. Use 'parallel' or 'chain'.")
         if not titles:
@@ -247,30 +292,10 @@ class TaskManager:
         parent.child_task_ids.extend(child_ids)
         self.update_task(parent_id, child_task_ids=parent.child_task_ids)
 
+        # Sync parent status (children just created → all ToDo → parent stays ToDo)
+        self._sync_parent_status(parent_id)
+
         return children
-
-    def _propagate_to_parent(self, parent_id: str) -> None:
-        """Check if all children are Done or Canceled; if so, promote parent.
-
-        Recurses upward through the hierarchy.
-        """
-        parent = self.get_task(parent_id)
-        if parent is None or not parent.child_task_ids:
-            return
-
-        all_resolved = True
-        for child_id in parent.child_task_ids:
-            child = self.get_task(child_id)
-            if child is None:
-                continue
-            if child.status not in ("Done", "Canceled"):
-                all_resolved = False
-                break
-
-        if all_resolved and parent.status != "Done":
-            self.update_task_status(parent_id, "Done", note="All children resolved (Done or Canceled)")
-            if parent.parent_task_id:
-                self._propagate_to_parent(parent.parent_task_id)
 
     def delete_task(self, task_id: str) -> bool:
         """Remove a ``T-XXX.md`` file."""
@@ -282,7 +307,7 @@ class TaskManager:
 
     def get_next_task(self) -> Optional[TaskData]:
         """Return the first task that is not ``Done`` or ``Canceled``."""
-        status_order = {"ToDo": 0, "Analyze": 1, "Implementation": 2, "In Review": 3, "Done": 4, "Canceled": 5}
+        status_order = {"ToDo": 0, "In Progress": 1, "Analyze": 2, "Implementation": 3, "In Review": 4, "Done": 5, "Canceled": 6}
         active: List[TaskData] = []
         for task in self.list_tasks():
             if task.status not in ("Done", "Canceled"):

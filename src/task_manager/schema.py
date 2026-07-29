@@ -127,7 +127,7 @@ class TaskData:
     complexity: str = ""
     estimated_hours: int = 0
     phase: str = ""  # Phase number or name (optional, from template)
-    status: str = "ToDo"  # ToDo | Analyze | Implementation | In Review | Done
+    status: str = "ToDo"  # ToDo | In Progress | Analyze | Implementation | In Review | Done | Canceled
     subtasks: List[Subtask] = field(default_factory=list)
 
     # Parent-child task references (for expand_task file-mode)
@@ -151,11 +151,12 @@ class TaskData:
 
     STATUS_ORDER: Dict[str, int] = field(default_factory=lambda: {
         "ToDo": 0,
-        "Analyze": 1,
-        "Implementation": 2,
-        "In Review": 3,
-        "Done": 4,
-        "Canceled": 5,
+        "In Progress": 1,
+        "Analyze": 2,
+        "Implementation": 3,
+        "In Review": 4,
+        "Done": 5,
+        "Canceled": 6,
     }, repr=False, compare=False)
 
     @property
