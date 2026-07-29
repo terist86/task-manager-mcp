@@ -799,35 +799,6 @@ if __name__ == "__main__":
         except Exception as e:
             return f"Error updating task: {str(e)}"
 
-    # ------------------------------------------------------------------
-    # Tool 16: generate_task_markdown
-    # ------------------------------------------------------------------
-
-    @mcp.tool()
-    async def generate_task_markdown(ctx: Context, project_name: str, task_title: str) -> str:
-        """Generate a human-readable markdown file from a task's JSON data.
-
-        Args:
-            project_name: Name of the project
-            task_title: Title or ID of the task
-
-        Returns:
-            Generated markdown content as string
-        """
-        try:
-            if not pm.project_exists(project_name):
-                return f"Project '{project_name}' not found"
-
-            tm = _get_tm(project_name)
-            task = _find_task_by_title(tm, task_title)
-            if task is None:
-                return f"Task '{task_title}' not found in '{project_name}'"
-
-            from task_manager.task_file import TaskFile
-            return TaskFile.to_markdown(task)
-        except Exception as e:
-            return f"Error generating markdown: {str(e)}"
-
     return mcp
 
 

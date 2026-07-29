@@ -62,50 +62,38 @@ projects/
 }
 ```
 
-### Task File Format (`T-XXX.md`)
+### Task File Format (`T-XXX.json`)
 
-Each task follows the standard Task File Template:
+Tasks are stored as JSON:
 
-```markdown
-# T-001: Task Title
-
-## Metadata
-- **ID:** T-001
-- **Priority:** P0
-- **Dependencies:** T-002
-- **Parent Task:** T-000
-- **Child Tasks:** T-003, T-004
-- **Complexity:** medium
-- **Estimate:** 8 hours
-
-## Status: ToDo
-
-## Log
-### 2026-07-27 — Analyze → Implementation
-- Transition validation: ✅ PASS
-- Note: Ready to code
-
-## Description
-Task description text.
-
-## Analyze
-### Input Criteria
-- [ ] ...
-### Output Criteria (-> Implementation)
-- [ ] ...
-
-## Implementation
-...
-
-## In Review
-...
-
-## Done
-- [ ] Task completed
-
-### Subtasks
-- [ ] Subtask 1
-- [x] Subtask 2
+```json
+{
+  "id": "T-001",
+  "title": "Task Title",
+  "status": "ToDo",
+  "priority": "P0",
+  "dependencies": ["T-002"],
+  "parent_task_id": null,
+  "child_task_ids": ["T-003"],
+  "description": "Task description text.",
+  "subtasks": [
+    {"title": "T-002: Login page", "status": "done"}
+  ],
+  "analyze": {
+    "input_criteria": ["Task understood"],
+    "output_criteria": ["Design done"],
+    "findings": "Analysis results..."
+  },
+  "log_entries": [
+    {
+      "timestamp": "2026-07-27T10:00:00+00:00",
+      "from_status": "ToDo",
+      "to_status": "Analyze",
+      "note": "Ready for analysis",
+      "validation_result": "✅ PASS"
+    }
+  ]
+}
 ```
 
 ## Prerequisites

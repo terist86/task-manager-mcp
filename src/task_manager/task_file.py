@@ -1,7 +1,6 @@
 """Reader / writer for individual ``T-XXX.json`` task files.
 
-Primary storage is JSON for AI agent consumption. Markdown generation
-is preserved as an export-only feature via :meth:`TaskFile.to_markdown`.
+JSON is the exclusive storage format. All data is stored as structured JSON.
 """
 
 from __future__ import annotations
@@ -10,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from .schema import TaskData, Subtask, CriteriaBlock
+from .schema import TaskData
 
 
 class TaskFile:
@@ -88,96 +87,4 @@ class TaskFile:
                     pass
         return f"T-{max_num + 1:03d}"
 
-    # ------------------------------------------------------------------
-    # Markdown export (human-readable, not used for storage)
-    # ------------------------------------------------------------------
 
-    @staticmethod
-    def to_markdown(task: TaskData) -> str:
-        """Generate a human-readable markdown representation of *task*.
-
-        This is NOT used for storage — only for export/generation.
-        The primary storage format is JSON.
-        """
-        lines: list[str] = []
-
-        # Title
-        lines.append(f"# {task.id}: {task.title}" if task.id else f"# {task.title}")
-        lines.append("")
-
-        # Metadata
-        lines.append("## Metadata")
-        if task.id:
-            lines.append(f"- **ID:** {task.id}")
-        if task.phase:
-            lines.append(f"- **Phase:** {task.phase}")
-        if task.category:
-            lines.append(f"- **Category:** {task.category}")
-        if task.priority:
-            lines.append(f"- **Priority:** {task.priority}")
-        if task.dependencies:
-            lines.append(f"- **Dependencies:** {', '.join(task.dependencies)}")
-        if task.parent_task_id:
-            lines.append(f"- **Parent Task:** {task.parent_task_id}")
-        if task.child_task_ids:
-            lines.append(f"- **Child Tasks:** {', '.join(task.child_task_ids)}")
-        if task.complexity:
-            lines.append(f"- **Complexity:** {task.complexity}")
-        if task.estimated_hours:
-            lines.append(f"- **Estimate:** {task.estimated_hours} hours")
-        lines.append(f"- **Created:** {task.created_at}")
-        lines.append(f"- **Updated:** {task.updated_at}")
-        lines.append("")
-
-        # Status
-        lines.append(f"## Status: {task.status}")
-        lines.append("")
-
-        # Log
-        if task.log_entries:
-            lines.append("## Log")
-            for entry in task.log_entries:
-                suffix = ""
-                if entry.from_status == "In Review" and entry.to_status == "Analyze":
-                    suffix = " (rejected)"
-                lines.append(f"### {entry.timestamp[:10]} — {entry.from_status} → {entry.to_status}{suffix}")
-                if entry.validation_result:
-                    lines.append(f"- Transition validation: {entry.validation_result}")
-                if entry.note:
-                    for note_line in entry.note.split("\n"):
-                        lines.append(f"- {note_line}")
-            lines.append("")
-
-        # Description
-        if task.description.strip():
-            lines.append("## Description")
-            lines.append(task.description.strip())
-            lines.append("")
-
-        # Phase blocks
-        for phase_name, phase_key in [("Analyze", "analyze"), ("Implementation", "implementation"),
-                                        ("In Review", "in_review"), ("Done", "done")]:
-            block = getattr(task, phase_key, None)
-            if block:
-                lines.append(f"## {phase_name}")
-                if block.input_criteria:
-                    lines.append("### Input Criteria")
-                    for c in block.input_criteria:
-                        lines.append(f"- [ ] {c}")
-                if block.output_criteria:
-                    lines.append("### Output Criteria (-> ...)")
-                    for c in block.output_criteria:
-                        lines.append(f"- [ ] {c}")
-                if block.findings:
-                    lines.append(block.findings.strip())
-                lines.append("")
-
-        # Subtasks
-        if task.subtasks:
-            lines.append("### Subtasks")
-            for st in task.subtasks:
-                mark = "x" if st.status == "done" else " "
-                lines.append(f"- [{mark}] {st.title}")
-            lines.append("")
-
-        return "\n".join(lines) + "\n"

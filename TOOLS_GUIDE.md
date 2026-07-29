@@ -167,45 +167,25 @@ Patches task fields. Only non-empty fields are applied.
 
 ---
 
-## Task File Template
+## Task File Format
 
-Every `T-XXX.md` follows this format:
+Tasks are stored as JSON files (`T-XXX.json`):
 
-```markdown
-# T-001: Task Title
-
-## Metadata
-- **ID:** T-001
-- **Phase:** 1
-- **Dependencies:** T-002
-- **Parent Task:** T-000
-- **Child Tasks:** T-003, T-004
-- **Estimate:** 8 hours
-
-## Status: ToDo
-
-## Analyze
-### Input Criteria
-- [ ] ...
-### Output Criteria (-> Implementation)
-- [ ] ...
-
-## Implementation
-...
-
-## In Review
-...
-
-## Done
-- [ ] Task completed
-
-### Subtasks
-- [ ] Subtask 1
+```json
+{
+  "id": "T-001",
+  "title": "Task Title",
+  "status": "ToDo",
+  "priority": "P0",
+  "dependencies": ["T-002"],
+  "parent_task_id": "T-000",
+  "child_task_ids": ["T-003", "T-004"]
+}
 ```
 
----
+For the full schema, see the [README](README.md).
 
-## Parent-Child Task References
+---
 
 When using `expand_task(create_files=True)`:
 
