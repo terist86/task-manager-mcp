@@ -4,7 +4,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for mul
 
 ## Overview
 
-This MCP server enables AI agents to manage tasks, track project progress, and break down tasks into independent subtask files. Each project is stored as a directory under `projects/` with its own metadata (`project.json`) and individual task files (`tasks/T-XXX.md`) following the standard Task File Template.
+This MCP server enables AI agents to manage tasks, track project progress, and break down tasks into independent subtask files. Each project is stored as a directory under `projects/` with its own metadata (`project.json`) and individual task files (`tasks/T-XXX.json`) in JSON format.
 
 ## Features
 
@@ -43,8 +43,8 @@ projects/
   <project-name>/
     project.json              # Project metadata
     tasks/
-      T-001.md                # Individual task file
-      T-002.md
+      T-001.json               # Individual task file (JSON)
+      T-002.json
       ...
 ```
 
@@ -57,6 +57,7 @@ projects/
   "language": "python",
   "build_system": "uv",
   "description": "Description of the project",
+  "git_repository": "https://github.com/user/repo",
   "created_at": "2026-07-27T10:00:00Z",
   "updated_at": "2026-07-27T10:00:00Z"
 }
@@ -202,10 +203,16 @@ parse_prd(project_name: str, prd_content: str) -> str
 
 ### `update_task_status`
 
-Update the status of a task or subtask. Every transition is logged in the task's `## Log` section with timestamp, validation result, and optional note.
+Update the status of a task or subtask. Every transition is logged in the task's `log_entries` array with timestamp, validation result, and optional note.
 
-**Task statuses:** `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`, `Canceled`
-**Subtask statuses:** `todo`, `done`
+**Task statuses:** `ToDo`, `In Progress`, `Analyze`, `Implementation`, `In Review`, `Done`, `Canceled`
+
+**Parent status automation:** When a task has children, its status is derived automatically:
+- All children `ToDo` → parent `ToDo`
+- Any child active → parent `In Progress`
+- All children `Done` → parent `Done`
+- All children `Canceled` → parent `Canceled`
+- Mix of `Done` + `Canceled` → parent `Done`
 
 **Transition flow:**
 ```
@@ -240,8 +247,8 @@ get_next_task(project_name: str) -> str
 
 Break down a task into smaller subtasks. Supports two modes:
 
-- **File mode** (`create_files=True`, default) — creates independent T-XXX.md files for each subtask with parent-child references and configurable dependency chains.
-- **Inline mode** (`create_files=False`) — adds subtasks as checkboxes inside the same T-XXX.md file (backward compatible).
+- **File mode** (`create_files=True`, default) — creates independent T-XXX.json files for each subtask with parent-child references.
+- **Inline mode** (`create_files=False`) — adds subtask checkboxes to the same task file.
 
 ```
 expand_task(
@@ -249,6 +256,7 @@ expand_task(
     task_title: str,
     create_files: bool = True,
     mode: str = "parallel",
+    subtask_titles: Optional[List[str]] = None,
 ) -> str
 ```
 
@@ -309,6 +317,7 @@ update_project(
     build_system: str = "",
     description: str = "",
     path: str = "",
+    git_repository: str = "",
 ) -> str
 ```
 
@@ -336,6 +345,7 @@ Update task fields. Only non-empty fields are applied. Useful for patching descr
 update_task(
     project_name: str,
     task_title: str,
+    title: str = "",
     description: str = "",
     category: str = "",
     priority: str = "",
@@ -344,6 +354,10 @@ update_task(
     dependencies: Optional[List[str]] = None,
     subtasks: Optional[List[str]] = None,
     subtask_statuses: Optional[List[str]] = None,
+    section: str = "",
+    input: Optional[List[str]] = None,
+    output: Optional[List[str]] = None,
+    findings: str = "",
 ) -> str
 ```
 
@@ -397,8 +411,8 @@ src/
   task_manager/
     __init__.py               # Public API exports
     schema.py                 # Data models (ProjectMetadata, TaskData, Subtask, CriteriaBlock, LogEntry)
-    task_file.py              # Individual T-XXX.md file reader/writer/parser
+    task_file.py              # T-XXX.json file reader/writer (JSON)
     project_manager.py        # Project-level CRUD + project.json metadata
     task_manager.py           # Per-project task CRUD + expand_to_files + status propagation
-    migration.py              # Old flat-file → new directory-based migration
+    migration.py              # Format migration utilities
 ```
