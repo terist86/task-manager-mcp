@@ -358,9 +358,13 @@ class TaskManager:
     # ------------------------------------------------------------------
 
     def _task_path(self, task_id: str) -> Path:
-        return self.tasks_dir / f"{task_id}.md"
+        return self.tasks_dir / f"{task_id}.json"
 
     def _all_task_files(self) -> List[Path]:
         if not self.tasks_dir.is_dir():
             return []
-        return sorted(self.tasks_dir.glob("T-*.md"))
+        # Support both .json (primary) and .md (migration coexistence)
+        files = sorted(self.tasks_dir.glob("T-*.json"))
+        if not files:
+            files = sorted(self.tasks_dir.glob("T-*.md"))
+        return files

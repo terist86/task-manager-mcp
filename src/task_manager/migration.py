@@ -122,7 +122,69 @@ class MigrationTool:
 
         if not self.old_dir.is_dir():
             report["<error>"] = "Old tasks directory missing"
-            return report
+        return report
+
+    # ------------------------------------------------------------------
+    # .md → .json migration
+    # ------------------------------------------------------------------
+
+    def migrate_md_to_json(self, project_name: str) -> dict:
+        """Convert all T-XXX.md files in a project to T-XXX.json."""
+        tasks_dir = self.pm.get_tasks_dir(project_name)
+        converted = 0
+        skipped = 0
+
+        for md_file in sorted(tasks_dir.glob("T-*.md")):
+            json_file = md_file.with_suffix(".json")
+            if json_file.exists():
+                skipped += 1
+                continue
+            try:
+                task = self._parse_task_template_md(md_file)
+                if task:
+                    from .task_file import TaskFile
+                    TaskFile(json_file).write(task)
+                    converted += 1
+            except Exception:
+                skipped += 1
+
+        return {"converted": converted, "skipped": skipped}
+
+    def _parse_task_template_md(self, filepath: Path) -> Optional[TaskData]:
+        """Parse a T-XXX.md file in Task File Template format into TaskData."""
+        import re
+        content = filepath.read_text(encoding="utf-8")
+        task = TaskData()
+
+        # Parse title: # T-001: Title
+        m = re.match(r"^#\s+(T-\d+):\s*(.+)", content.split("\n")[0] if content else "")
+        if m:
+            task.id = m.group(1)
+            task.title = m.group(2).strip()
+
+        # Parse metadata
+        for m in re.finditer(r"^-\s+\*\*(.+?)\*\*:\s*(.+)", content, re.MULTILINE):
+            key = m.group(1).strip().rstrip(":").strip().lower()
+            val = m.group(2).strip()
+            if key == "priority": task.priority = val
+            elif key == "category": task.category = val
+            elif key == "dependencies": task.dependencies = [d.strip() for d in val.split(",") if d.strip()]
+            elif key == "parent task": task.parent_task_id = val
+            elif key == "child tasks": task.child_task_ids = [d.strip() for d in val.split(",") if d.strip()]
+            elif key == "complexity": task.complexity = val
+            elif key == "estimated hours": task.estimated_hours = int(val.split()[0]) if val else 0
+
+        # Parse status
+        m = re.search(r"^##\s+Status:\s*(.+)", content, re.MULTILINE)
+        if m:
+            task.status = m.group(1).strip()
+
+        # Parse description
+        m = re.search(r"^##\s+Description\n(.+?)(?=\n##|\Z)", content, re.MULTILINE | re.DOTALL)
+        if m:
+            task.description = m.group(1).strip()
+
+        return task
 
         for md_file in sorted(self.old_dir.glob("*.md")):
             project_name = md_file.stem
