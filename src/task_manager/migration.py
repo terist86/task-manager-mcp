@@ -162,8 +162,8 @@ class MigrationTool:
             task.id = m.group(1)
             task.title = m.group(2).strip()
 
-        # Parse metadata
-        for m in re.finditer(r"^-\s+\*\*(.+?)\*\*:\s*(.+)", content, re.MULTILINE):
+        # Parse metadata (colon is INSIDE bold: **Key:** value)
+        for m in re.finditer(r"^-\s+\*\*(.+?)\*\*\s*(.+)", content, re.MULTILINE):
             key = m.group(1).strip().rstrip(":").strip().lower()
             val = m.group(2).strip()
             if key == "priority": task.priority = val
