@@ -227,7 +227,7 @@ class TaskManager:
         if parent.status != target:
             self.update_task_status(parent_id, target, note="Parent status synced from children")
 
-        # Sync child statuses to parent Subtask checkboxes
+        # Sync child statuses and titles to parent Subtask entries
         subtask_updated = False
         for child_id in parent.child_task_ids:
             child = self.get_task(child_id)
@@ -235,6 +235,12 @@ class TaskManager:
                 continue
             for st in parent.subtasks:
                 if st.title.startswith(f"{child_id}:"):
+                    # Sync title
+                    expected_title = f"{child_id}: {child.title}"
+                    if st.title != expected_title:
+                        st.title = expected_title
+                        subtask_updated = True
+                    # Sync checkbox status
                     mapped = "done" if child.status in ("Done", "Canceled") else "todo"
                     if st.status != mapped:
                         st.status = mapped

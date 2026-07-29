@@ -323,7 +323,7 @@ def create_mcp() -> FastMCP:
     # ------------------------------------------------------------------
 
     @mcp.tool()
-    async def expand_task(ctx: Context, project_name: str, task_title: str, create_files: bool = True, mode: str = "parallel") -> str:
+    async def expand_task(ctx: Context, project_name: str, task_title: str, create_files: bool = True, mode: str = "parallel", subtask_titles: Optional[List[str]] = None) -> str:
         """Break down a task into smaller subtasks using AI.
 
         Args:
@@ -334,6 +334,7 @@ def create_mcp() -> FastMCP:
                           add inline subtasks to the existing task file.
             mode: Expansion mode when create_files=True — "parallel" (all children
                   depend on parent) or "chain" (sequential deps: A → B → C).
+            subtask_titles: Custom titles for child tasks (required when create_files=True).
 
         Returns:
             Confirmation message with new subtask IDs (file mode) or count (inline mode)
@@ -349,11 +350,12 @@ def create_mcp() -> FastMCP:
 
             if create_files:
                 # File-mode: create independent T-XXX.md files
-                new_titles = [
-                    f"{task.title} — Part {i+1}"
-                    for i in range(3)
-                ]
-                children = tm.expand_to_files(task.id, new_titles, mode=mode)
+                if not subtask_titles:
+                    subtask_titles = [
+                        f"{task.title} — Part {i+1}"
+                        for i in range(3)
+                    ]
+                children = tm.expand_to_files(task.id, subtask_titles, mode=mode)
                 child_ids = [c.id for c in children]
                 return (
                     f"Expanded task '{task.id}' into {len(children)} files ({mode} mode): "
@@ -706,6 +708,7 @@ if __name__ == "__main__":
         ctx: Context,
         project_name: str,
         task_title: str,
+        title: str = "",
         description: str = "",
         category: str = "",
         priority: str = "",
@@ -720,6 +723,7 @@ if __name__ == "__main__":
         Args:
             project_name: Name of the project
             task_title: Title or ID of the task
+            title: New title for the task
             description: New description
             category: New category (e.g. "[MVP]")
             priority: New priority (P0-P3)
@@ -742,6 +746,8 @@ if __name__ == "__main__":
                 return f"Task '{task_title}' not found"
 
             updates = {}
+            if title:
+                updates["title"] = title
             if description:
                 updates["description"] = description
             if category:
@@ -766,6 +772,9 @@ if __name__ == "__main__":
                 return "No fields to update"
 
             tm.update_task(task.id, **updates)
+            # If title changed and task is a child, sync to parent's Subtask section
+            if title and task.parent_task_id:
+                tm._sync_parent_status(task.parent_task_id)
             return f"Updated task '{task.id}': {', '.join(updates.keys())}"
         except Exception as e:
             return f"Error updating task: {str(e)}"
