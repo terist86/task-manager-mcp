@@ -717,6 +717,10 @@ if __name__ == "__main__":
         dependencies: Optional[List[str]] = None,
         subtasks: Optional[List[str]] = None,
         subtask_statuses: Optional[List[str]] = None,
+        section: str = "",
+        input: Optional[List[str]] = None,
+        output: Optional[List[str]] = None,
+        findings: str = "",
     ) -> str:
         """Update task fields. Only non-empty fields are applied.
 
@@ -732,6 +736,10 @@ if __name__ == "__main__":
             dependencies: List of dependency task IDs
             subtasks: List of subtask titles (replaces existing)
             subtask_statuses: Matching list of statuses (todo/done) for subtasks
+            section: Phase section to update (analyze/implementation/in_review/done)
+            input: Input criteria checkboxes for the specified section
+            output: Output criteria checkboxes for the specified section
+            findings: Findings text for the specified section
 
         Returns:
             Confirmation message
@@ -767,6 +775,18 @@ if __name__ == "__main__":
                     Subtask(title=s, status=statuses[i] if i < len(statuses) else "todo")
                     for i, s in enumerate(subtasks)
                 ]
+
+            # Phase section criteria
+            if section and section in ("analyze", "implementation", "in_review", "done"):
+                from task_manager.schema import CriteriaBlock
+                block = getattr(task, section) or CriteriaBlock()
+                if input is not None:
+                    block.input_criteria = list(input)
+                if output is not None:
+                    block.output_criteria = list(output)
+                if findings:
+                    block.findings = findings
+                updates[section] = block
 
             if not updates:
                 return "No fields to update"

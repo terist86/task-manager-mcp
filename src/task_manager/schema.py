@@ -95,6 +95,7 @@ class CriteriaBlock:
     """Checklist block for a phase section."""
     input_criteria: List[str] = field(default_factory=list)
     output_criteria: List[str] = field(default_factory=list)
+    findings: str = ""  # Analysis summary, implementation notes, review findings
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -104,6 +105,7 @@ class CriteriaBlock:
         return cls(
             input_criteria=data.get("input_criteria", []),
             output_criteria=data.get("output_criteria", []),
+            findings=data.get("findings", ""),
         )
 
 

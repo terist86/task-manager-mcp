@@ -222,18 +222,26 @@ class TaskFile:
         if task.analyze:
             lines.append("## Analyze")
             lines.extend(TaskFile._format_criteria_block(task.analyze))
+            if task.analyze.findings:
+                lines.append(task.analyze.findings.strip())
             lines.append("")
         if task.implementation:
             lines.append("## Implementation")
             lines.extend(TaskFile._format_criteria_block(task.implementation))
+            if task.implementation.findings:
+                lines.append(task.implementation.findings.strip())
             lines.append("")
         if task.in_review:
             lines.append("## In Review")
             lines.extend(TaskFile._format_criteria_block(task.in_review))
+            if task.in_review.findings:
+                lines.append(task.in_review.findings.strip())
             lines.append("")
         if task.done:
             lines.append("## Done")
             lines.extend(TaskFile._format_criteria_block(task.done))
+            if task.done.findings:
+                lines.append(task.done.findings.strip())
             lines.append("")
 
         # Subtasks
@@ -265,6 +273,7 @@ class TaskFile:
         description_lines: list[str] = []
         current_log_entry: Optional[LogEntry] = None
         log_note_lines: list[str] = []
+        current_findings_lines: list[str] = []
 
         for line in lines:
             # Match title header: # T-001: Title
@@ -289,6 +298,8 @@ class TaskFile:
 
             # ## Description section
             if _RE_DESC_START.match(line):
+                _flush_criteria(task, current_section, current_block, current_criteria)
+                _flush_findings(task, current_section, current_findings_lines)
                 _flush_log(task, current_log_entry, log_note_lines)
                 current_log_entry = None
                 log_note_lines = []
@@ -347,11 +358,13 @@ class TaskFile:
             # ## Analyze / Implementation / In Review / Done
             m = _RE_SECTION.match(line)
             if m:
-                # Flush previous criteria
+                # Flush previous criteria and findings
                 _flush_criteria(task, current_section, current_block, current_criteria)
+                _flush_findings(task, current_section, current_findings_lines)
                 _flush_log(task, current_log_entry, log_note_lines)
                 current_log_entry = None
                 log_note_lines = []
+                current_findings_lines = []
                 current_section = m.group(1).lower().replace(" ", "_")
                 current_block = None
                 current_criteria = []
@@ -385,6 +398,15 @@ class TaskFile:
                     current_criteria.append(text)
                 continue
 
+            # Findings lines (text after criteria, before next ## section)
+            if current_section and not in_description and not in_log and not in_subtasks:
+                stripped = line.strip()
+                if stripped and not line.startswith("#") and not line.startswith("- [") and not _RE_CHECKBOX.match(line):
+                    current_findings_lines.append(stripped)
+                    continue
+                elif not stripped:
+                    continue
+
             # Description lines (everything else between ## Description and next ##)
             if in_description and not in_subtasks and not line.startswith("#"):
                 if line.strip():
@@ -393,6 +415,7 @@ class TaskFile:
 
         # Flush remaining
         _flush_criteria(task, current_section, current_block, current_criteria)
+        _flush_findings(task, current_section, current_findings_lines)
 
         if current_log_entry is not None:
             current_log_entry.note = "\n".join(log_note_lines).strip()
@@ -468,6 +491,26 @@ def _flush_criteria(
         existing.output_criteria.extend(criteria)
 
     setattr(task, attr_name, existing)
+
+
+def _flush_findings(
+    task: TaskData,
+    section: Optional[str],
+    findings_lines: list[str],
+) -> None:
+    """Persist collected findings text into the right criteria block on *task*."""
+    if not section or not findings_lines:
+        return
+
+    findings_text = "\n".join(findings_lines).strip()
+    if not findings_text:
+        return
+
+    existing: Optional[CriteriaBlock] = getattr(task, section, None)
+    if existing is None:
+        existing = CriteriaBlock()
+    existing.findings = findings_text
+    setattr(task, section, existing)
 
 
 def _flush_log(
