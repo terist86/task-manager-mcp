@@ -124,7 +124,7 @@ class TaskManager:
 
     VALID_TRANSITIONS: dict[str, set[str]] = {
         "ToDo":          {"Analyze", "In Progress"},
-        "In Progress":   {"Analyze", "Implementation", "In Review"},
+        "In Progress":   {"Analyze", "Implementation", "In Review", "Done"},
         "Analyze":       {"Implementation"},
         "Implementation": {"In Review"},
         "In Review":     {"Done"},
@@ -227,6 +227,22 @@ class TaskManager:
         if parent.status != target:
             self.update_task_status(parent_id, target, note="Parent status synced from children")
 
+        # Sync child statuses to parent Subtask checkboxes
+        subtask_updated = False
+        for child_id in parent.child_task_ids:
+            child = self.get_task(child_id)
+            if child is None:
+                continue
+            for st in parent.subtasks:
+                if st.title.startswith(f"{child_id}:"):
+                    mapped = "done" if child.status in ("Done", "Canceled") else "todo"
+                    if st.status != mapped:
+                        st.status = mapped
+                        subtask_updated = True
+                    break
+        if subtask_updated:
+            self.update_task(parent_id, subtasks=parent.subtasks)
+
     # ------------------------------------------------------------------
     # Task expansion into separate files
     # ------------------------------------------------------------------
@@ -290,7 +306,13 @@ class TaskManager:
 
         # Update parent with child references (extend, not replace)
         parent.child_task_ids.extend(child_ids)
-        self.update_task(parent_id, child_task_ids=parent.child_task_ids)
+        # Add Subtask entries referencing child tasks
+        for child in children:
+            parent.subtasks.append(Subtask(
+                title=f"{child.id}: {child.title}",
+                status="todo"  # all children start at ToDo
+            ))
+        self.update_task(parent_id, child_task_ids=parent.child_task_ids, subtasks=parent.subtasks)
 
         # Sync parent status (children just created → all ToDo → parent stays ToDo)
         self._sync_parent_status(parent_id)
