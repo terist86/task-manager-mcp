@@ -578,6 +578,7 @@ if __name__ == "__main__":
         build_system: str = "",
         description: str = "",
         path: str = "",
+        git_repository: str = "",
     ) -> str:
         """Update metadata for an existing project.
 
@@ -587,6 +588,7 @@ if __name__ == "__main__":
             build_system: Build system (e.g. "cmake", "uv")
             description: Project description
             path: Path to the project on disk
+            git_repository: Git repository URL
 
         Returns:
             Confirmation message with updated fields
@@ -604,6 +606,8 @@ if __name__ == "__main__":
                 updates["description"] = description
             if path:
                 updates["path"] = path
+            if git_repository:
+                updates["git_repository"] = git_repository
 
             if not updates:
                 return "No fields to update"

@@ -42,6 +42,7 @@ class ProjectManager:
         language: str = "",
         build_system: str = "",
         description: str = "",
+        git_repository: str = "",
     ) -> ProjectMetadata:
         """Create ``projects/<name>/`` with ``project.json`` and an empty ``tasks/`` subdirectory.
 
@@ -100,7 +101,7 @@ class ProjectManager:
             raise FileNotFoundError(f"Project '{name}' not found")
 
         # Whitelist settable fields
-        settable = {"path", "language", "build_system", "description"}
+        settable = {"path", "language", "build_system", "description", "git_repository"}
         for key, value in kwargs.items():
             if key in settable:
                 setattr(meta, key, value)

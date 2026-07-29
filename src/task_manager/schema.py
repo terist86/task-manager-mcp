@@ -26,6 +26,7 @@ class ProjectMetadata:
     language: str = ""
     build_system: str = ""
     description: str = ""
+    git_repository: str = ""
     created_at: str = field(default_factory=_now_iso)
     updated_at: str = field(default_factory=_now_iso)
 
