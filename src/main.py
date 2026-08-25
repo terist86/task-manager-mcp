@@ -1,5 +1,5 @@
-"""MCP server entry point — registers all 13 task-management tools.
- 
+"""MCP server entry point — registers all 15 task-management tools.
+
 Rewritten to use the new ``src/task_manager/`` package (ProjectManager,
 TaskManager) instead of the old monolithic ``task_manager.py``.
 """

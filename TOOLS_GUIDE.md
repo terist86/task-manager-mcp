@@ -9,8 +9,8 @@ projects/
   <project-name>/
     project.json              # Metadata: name, path, language, build_system, description
     tasks/
-      T-001.md                # Individual task file (Task File Template format)
-      T-002.md
+      T-001.json              # Individual task file (JSON format)
+      T-002.json
 ```
 
 Source code is modularized under `src/task_manager/`:
@@ -18,7 +18,7 @@ Source code is modularized under `src/task_manager/`:
 | Module | Responsibility |
 |--------|---------------|
 | `schema.py` | `ProjectMetadata`, `TaskData`, `Subtask`, `CriteriaBlock` dataclasses |
-| `task_file.py` | `TaskFile` — read/write/parse individual T-XXX.md files |
+| `task_file.py` | `TaskFile` — read/write/parse individual T-XXX.json files |
 | `project_manager.py` | `ProjectManager` — project CRUD + project.json |
 | `task_manager.py` | `TaskManager` — per-project task CRUD + `expand_to_files` + status propagation |
 | `migration.py` | `MigrationTool` — convert old tasks/*.md to projects/ structure |
@@ -26,6 +26,8 @@ Source code is modularized under `src/task_manager/`:
 ---
 
 ## All 15 MCP Tools
+
+Most tools return plain text confirmation messages. Tools that return structured data (`list_projects`, `list_tasks`, `get_task`, `get_task_dependencies`, `estimate_task_complexity`, `suggest_next_actions`, `get_next_task`) return JSON strings.
 
 ### 1. `create_task_file`
 Creates a project directory with `project.json` and `tasks/` subdirectory.
@@ -46,7 +48,7 @@ Adds a new task with an auto-assigned `T-XXX` ID.
 | `batch_mode` | `bool` | no |
 
 ### 3. `parse_prd`
-Parses a PRD markdown document and creates structured tasks.
+Parses a PRD markdown document and creates a fixed set of starter tasks (Project Setup, Core Features, Authentication & Local Storage, UI/UX) from extracted bullet points.
 
 | Param | Type | Required |
 |-------|------|----------|
@@ -54,7 +56,7 @@ Parses a PRD markdown document and creates structured tasks.
 | `prd_content` | `str` | yes |
 
 ### 4. `update_task_status`
-Updates task or subtask status. **Task statuses:** `ToDo`, `Analyze`, `Implementation`, `In Review`, `Done`. **Subtask statuses:** `todo`, `done`. Automatically triggers status propagation when child reaches Done.
+Updates task or subtask status. **Task statuses:** `ToDo`, `In Progress`, `Analyze`, `Implementation`, `In Review`, `Done`, `Canceled`. **Subtask statuses:** `todo`, `done`. Automatically triggers status propagation when child reaches `Done` or `Canceled`.
 
 | Param | Type | Required |
 |-------|------|----------|
@@ -62,9 +64,10 @@ Updates task or subtask status. **Task statuses:** `ToDo`, `Analyze`, `Implement
 | `task_title` | `str` | yes (title or ID, e.g. "T-001") |
 | `subtask_title` | `str` | no |
 | `status` | `str` | default: `"done"` |
+| `note` | `str` | no |
 
 ### 5. `get_next_task`
-Returns the first non-Done task, sorted by status priority.
+Returns the first non-Done and non-Canceled task, sorted by status priority. Returns JSON with `task_id`, `task`, `subtask`, and `description`.
 
 | Param | Type | Required |
 |-------|------|----------|
@@ -73,7 +76,7 @@ Returns the first non-Done task, sorted by status priority.
 ### 6. `expand_task` ⭐
 Breaks a task into subtasks. **Two modes:**
 
-- **File** (`create_files=True`, default) — creates independent T-XXX.md files with parent-child references
+- **File** (`create_files=True`, default) — creates independent T-XXX.json files with parent-child references
 - **Inline** (`create_files=False`) — adds checkboxes to the same file (backward compatible)
 
 | Param | Type | Required | Default |
@@ -82,8 +85,11 @@ Breaks a task into subtasks. **Two modes:**
 | `task_title` | `str` | yes | |
 | `create_files` | `bool` | no | `True` |
 | `mode` | `str` | no | `"parallel"` |
+| `subtask_titles` | `List[str]` | no | `["<title> — Part 1", ...]` |
 
 **Modes:** `"parallel"` (all children → parent), `"chain"` (sequential deps)
+
+**Note:** `subtask_titles` is required when `create_files=True`. If omitted, three generic child titles are generated automatically.
 
 ### 7. `generate_task_file`
 Generates a source file template from a task description.
@@ -110,7 +116,7 @@ Heuristic complexity estimate (low/medium/high) based on description length and 
 | `task_title` | `str` | yes |
 
 ### 10. `suggest_next_actions`
-Returns a list of suggested next actions for a task.
+Returns a list of template-based suggested next actions for a task.
 
 | Param | Type | Required |
 |-------|------|----------|
@@ -132,14 +138,15 @@ Updates project metadata. Only non-empty fields are applied.
 | `build_system` | `str` | no |
 | `description` | `str` | no |
 | `path` | `str` | no |
+| `git_repository` | `str` | no |
 
 ### 13. `list_tasks`
-Lists all tasks for a project, optionally filtered by status.
+Lists all tasks for a project, optionally filtered by status. Returns JSON with `id`, `title`, `status`, `priority`, `category`, `subtasks_total`, and `subtasks_done`.
 
 | Param | Type | Required |
 |-------|------|----------|
 | `project_name` | `str` | yes |
-| `status` | `str` | no (ToDo/Analyze/Implementation/In Review/Done/Canceled) |
+| `status` | `str` | no (ToDo/In Progress/Analyze/Implementation/In Review/Done/Canceled) |
 
 ### 14. `get_task`
 Returns full task data as JSON including description, criteria blocks, log entries, and all metadata.
@@ -156,6 +163,7 @@ Patches task fields. Only non-empty fields are applied.
 |-------|------|----------|
 | `project_name` | `str` | yes |
 | `task_title` | `str` | yes |
+| `title` | `str` | no (replaces task title) |
 | `description` | `str` | no |
 | `category` | `str` | no |
 | `priority` | `str` | no (P0-P3) |
@@ -164,6 +172,10 @@ Patches task fields. Only non-empty fields are applied.
 | `dependencies` | `List[str]` | no |
 | `subtasks` | `List[str]` | no (replaces existing) |
 | `subtask_statuses` | `List[str]` | no (todo/done, matches subtasks) |
+| `section` | `str` | no (`analyze`/`implementation`/`in_review`/`done`) |
+| `input` | `List[str]` | no (input criteria for the section) |
+| `output` | `List[str]` | no (output criteria for the section) |
+| `findings` | `str` | no (findings text for the section) |
 
 ---
 
