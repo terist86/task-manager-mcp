@@ -5,7 +5,7 @@ Summary: Basic MCP server with SSE connection
 Requires-Python: >=3.12
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: mcp[cli]>=1.3.0
+Requires-Dist: mcp[cli]<2.0,>=1.3.0
 Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: pyyaml>=6.0
 Dynamic: license-file
@@ -34,6 +34,8 @@ This MCP server enables AI agents to manage tasks, track project progress, and b
 |------|-------------|
 | `add_task` | Add a new task to a project (auto-assigned T-XXX ID) |
 | `list_tasks` | List all tasks for a project, optionally filtered by status |
+| `get_task` | Get full task data as JSON including criteria, log, and dependencies |
+| `update_task` | Patch task fields (description, priority, dependencies, phase criteria, etc.) |
 | `update_task_status` | Update the status of a task or subtask |
 | `get_next_task` | Get the next uncompleted task from a project |
 | `get_task_dependencies` | Get all tasks that depend on a given task |
@@ -45,7 +47,7 @@ This MCP server enables AI agents to manage tasks, track project progress, and b
 | `parse_prd` | Parse a PRD document and create structured tasks |
 | `expand_task` | Break down a task into subtasks — file mode (default) or inline mode |
 | `estimate_task_complexity` | Estimate task complexity (low/medium/high) and time requirements |
-| `suggest_next_actions` | Get AI-powered suggestions for next actions on a task |
+| `suggest_next_actions` | Get template-based suggestions for next actions on a task |
 | `generate_task_file` | Generate a source file template based on a task description |
 
 ## Data Structure
@@ -181,7 +183,7 @@ docker compose up -d
 
 ## Tool Reference
 
-All tools return string messages suitable for display to the user.
+Most tools return string confirmation messages, while tools that return structured data (`list_projects`, `list_tasks`, `get_task`, `get_task_dependencies`, `estimate_task_complexity`, `suggest_next_actions`, `get_next_task`) return JSON strings.
 
 ### `create_task_file`
 
@@ -207,7 +209,7 @@ add_task(
 
 ### `parse_prd`
 
-Parse a PRD document and create structured tasks from its sections.
+Parse a PRD document and create structured tasks from its sections. Currently extracts bullet points from the `Key Features` section and creates a fixed set of four starter tasks (Project Setup, Core Features, Authentication & Local Storage, UI/UX).
 
 ```
 parse_prd(project_name: str, prd_content: str) -> str
@@ -229,11 +231,16 @@ Update the status of a task or subtask. Every transition is logged in the task's
 **Transition flow:**
 ```
 ToDo → Analyze → Implementation → In Review → Done
-            ▲                         │
-            └─────────────────────────┘
-                In Review → Analyze (rejected)
+  │       ▲            ▲              │
+  └───────┘            └──────────────┘
+   In Progress          In Review → Analyze (rejected)
+
 Any → Canceled (terminal, dead end)
 ```
+
+Additional allowed transitions:
+- `ToDo` → `In Progress`
+- `In Progress` → `Analyze`, `Implementation`, `In Review`, or `Done`
 
 When a task reaches `Done` or `Canceled` and it has a parent, status propagation checks siblings and auto-promotes the parent.
 
@@ -304,7 +311,7 @@ Returns JSON: `{"task_id": "T-001", "task": "...", "complexity": "medium", "esti
 
 ### `suggest_next_actions`
 
-Get AI-powered suggestions for the next steps on a task.
+Get template-based suggestions for the next steps on a task.
 
 ```
 suggest_next_actions(project_name: str, task_title: str) -> str
@@ -341,6 +348,8 @@ List all tasks for a project, optionally filtered by status.
 list_tasks(project_name: str, status: Optional[str] = None) -> str
 ```
 
+Returns a JSON array of task objects including `id`, `title`, `status`, `priority`, `category`, `subtasks_total`, and `subtasks_done`.
+
 ### `get_task`
 
 Get full task data as JSON including description, criteria blocks, log entries, and dependencies.
@@ -351,7 +360,7 @@ get_task(project_name: str, task_title: str) -> str
 
 ### `update_task`
 
-Update task fields. Only non-empty fields are applied. Useful for patching description, priority, subtasks, or dependencies without changing status.
+Update task fields. Only non-empty fields are applied. Useful for patching description, priority, subtasks, dependencies, or phase criteria (analyze/implementation/in_review/done) without changing the main status field.
 
 ```
 update_task(
