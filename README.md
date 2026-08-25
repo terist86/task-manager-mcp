@@ -130,6 +130,11 @@ docker build -t task-manager-mcp --build-arg PORT=8050 .
 | `HOST` | Host for SSE transport | `0.0.0.0` |
 | `PORT` | Port for SSE transport | `8050` |
 
+### Transport modes
+
+- **SSE** (default) — multi-project mode. Projects are stored under `projects/<project-name>/` with `project.json` metadata and `tasks/T-XXX.json` files.
+- **Stdio** — single-project mode. The current working directory is treated as one project; tasks are stored directly in `./tasks/T-XXX.json` and metadata in `./project.json`. The `project_name` parameter is still accepted by all tools for API compatibility but is ignored.
+
 ## Running the Server
 
 ```bash
@@ -157,13 +162,16 @@ docker compose up -d
 
 ### Stdio
 
+In stdio mode the server treats the current working directory as a single project. Run it from the project root you want to manage.
+
 ```json
 {
   "mcpServers": {
     "task-manager": {
       "command": "python3",
       "args": ["src/main.py"],
-      "env": { "TRANSPORT": "stdio" }
+      "env": { "TRANSPORT": "stdio" },
+      "cwd": "/path/to/your/project"
     }
   }
 }

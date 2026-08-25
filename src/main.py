@@ -26,8 +26,14 @@ load_dotenv()
 # MCP factory
 # ---------------------------------------------------------------------------
 
-def create_mcp() -> MCPServer:
-    """Create a configured ``MCPServer`` instance with all tools registered."""
+def create_mcp(transport: str = "sse") -> MCPServer:
+    """Create a configured ``MCPServer`` instance with all tools registered.
+
+    Args:
+        transport: ``"sse"`` for multi-project mode (uses ``projects/``) or
+                   ``"stdio"`` for single-project mode (uses ``tasks/`` in cwd).
+    """
+    single_project = transport == "stdio"
     mcp = MCPServer(
         name="TASK MANAGER",
         title="Task Manager MCP Server",
@@ -35,17 +41,39 @@ def create_mcp() -> MCPServer:
         version="0.1.0",
     )
 
-    pm = ProjectManager("projects")
+    if single_project:
+        # stdio: single project in current working directory
+        pm = ProjectManager(".", single_project=True)
+        _default_project_name = Path(".").resolve().name
+    else:
+        # sse: multi-project under projects/
+        pm = ProjectManager("projects")
+        _default_project_name = None
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
+    def _resolve_project_name(project_name: str) -> str:
+        """Return the effective project name.
+
+        In stdio mode the project name is ignored and the current working
+        directory is used as the single project.
+        """
+        if single_project:
+            return _default_project_name
+        return project_name
+
     def _get_tm(project_name: str) -> TaskManager:
         """Get a TaskManager for *project_name*, ensuring the project exists."""
-        if not pm.project_exists(project_name):
-            pm.create_project(project_name)
-        return TaskManager(project_name, projects_dir="projects")
+        effective_name = _resolve_project_name(project_name)
+        if not pm.project_exists(effective_name):
+            pm.create_project(effective_name)
+        return TaskManager(
+            effective_name,
+            projects_dir="." if single_project else "projects",
+            single_project=single_project,
+        )
 
     def _find_task_by_title(tm: TaskManager, title_or_id: str) -> Optional[TaskData]:
         """Look up a task by ID (T-XXX) or by title."""
@@ -74,9 +102,14 @@ def create_mcp() -> MCPServer:
             Confirmation message with the project path
         """
         try:
-            if pm.project_exists(project_name):
+            effective_name = _resolve_project_name(project_name)
+            if pm.project_exists(effective_name):
+                if single_project:
+                    return "Project already exists in current directory"
                 return f"Project '{project_name}' already exists"
-            meta = pm.create_project(project_name)
+            meta = pm.create_project(effective_name)
+            if single_project:
+                return f"Created project in current directory (project.json + tasks/)"
             return f"Created project '{project_name}' at projects/{project_name}/ (project.json + tasks/)"
         except Exception as e:
             return f"Error creating project: {str(e)}"
@@ -107,8 +140,9 @@ def create_mcp() -> MCPServer:
             Confirmation message with the new task ID
         """
         try:
-            if not batch_mode and not pm.project_exists(project_name):
-                pm.create_project(project_name)
+            effective_name = _resolve_project_name(project_name)
+            if not batch_mode and not pm.project_exists(effective_name):
+                pm.create_project(effective_name)
 
             tm = _get_tm(project_name)
             task = tm.create_task(
@@ -116,6 +150,8 @@ def create_mcp() -> MCPServer:
                 description=description,
                 subtasks=subtasks,
             )
+            if single_project:
+                return f"Added task '{task.id}: {task.title}'"
             return f"Added task '{task.id}: {task.title}' to {project_name}"
         except Exception as e:
             return f"Error adding task: {str(e)}"
@@ -159,8 +195,9 @@ def create_mcp() -> MCPServer:
                 sections[current_section] = "\n".join(current_lines)
 
             # Ensure project exists
-            if not pm.project_exists(project_name):
-                pm.create_project(project_name)
+            effective_name = _resolve_project_name(project_name)
+            if not pm.project_exists(effective_name):
+                pm.create_project(effective_name)
 
             tm = _get_tm(project_name)
             created: List[str] = []
@@ -225,6 +262,8 @@ def create_mcp() -> MCPServer:
             )
             created.append(t.id)
 
+            if single_project:
+                return f"Parsed PRD and created {len(created)} tasks: {', '.join(created)}"
             return f"Parsed PRD and created {len(created)} tasks in '{project_name}': {', '.join(created)}"
         except Exception as e:
             return f"Error parsing PRD: {str(e)}"
@@ -597,7 +636,10 @@ if __name__ == "__main__":
             Confirmation message with updated fields
         """
         try:
-            if not pm.project_exists(project_name):
+            effective_name = _resolve_project_name(project_name)
+            if not pm.project_exists(effective_name):
+                if single_project:
+                    return "Project not found in current directory"
                 return f"Project '{project_name}' not found"
 
             updates = {}
@@ -615,7 +657,9 @@ if __name__ == "__main__":
             if not updates:
                 return "No fields to update"
 
-            pm.update_project(project_name, **updates)
+            pm.update_project(effective_name, **updates)
+            if single_project:
+                return f"Updated project: {json.dumps(updates)}"
             return f"Updated project '{project_name}': {json.dumps(updates)}"
         except Exception as e:
             return f"Error updating project: {str(e)}"
@@ -827,8 +871,8 @@ def extract_bullet_points(content: str) -> List[str]:
 # ---------------------------------------------------------------------------
 
 async def main() -> None:
-    mcp = create_mcp()
     transport = os.getenv("TRANSPORT", "sse")
+    mcp = create_mcp(transport=transport)
     if transport == "sse":
         await mcp.run_sse_async(
             host=os.getenv("HOST", "0.0.0.0"),

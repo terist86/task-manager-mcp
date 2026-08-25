@@ -27,9 +27,15 @@ class ProjectManager:
         meta = pm.get_project("my-app")
     """
 
-    def __init__(self, projects_dir: str = "projects") -> None:
-        self.projects_dir = Path(projects_dir)
-        self.projects_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, projects_dir: str = "projects", single_project: bool = False) -> None:
+        self.single_project = single_project
+        if single_project:
+            # In single-project mode the project lives in the current working directory.
+            self.projects_dir = Path(projects_dir).resolve()
+            self.projects_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.projects_dir = Path(projects_dir)
+            self.projects_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
     # Public API
@@ -50,12 +56,17 @@ class ProjectManager:
         Raises :class:`FileExistsError` if the project already exists.
         """
         proj_dir = self._get_project_dir(name)
-        if proj_dir.exists():
-            raise FileExistsError(f"Project '{name}' already exists at {proj_dir}")
-
-        proj_dir.mkdir(parents=True)
-        tasks_dir = proj_dir / "tasks"
-        tasks_dir.mkdir()
+        if self.single_project:
+            if self.project_exists(name):
+                raise FileExistsError(f"Project '{name}' already exists at {proj_dir}")
+            tasks_dir = proj_dir / "tasks"
+            tasks_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            if proj_dir.exists():
+                raise FileExistsError(f"Project '{name}' already exists at {proj_dir}")
+            proj_dir.mkdir(parents=True)
+            tasks_dir = proj_dir / "tasks"
+            tasks_dir.mkdir()
 
         meta = ProjectMetadata(
             name=name,
@@ -79,6 +90,17 @@ class ProjectManager:
         results: List[ProjectMetadata] = []
         if not self.projects_dir.is_dir():
             return results
+
+        if self.single_project:
+            mp = self.projects_dir / _METADATA_FILENAME
+            if mp.is_file():
+                try:
+                    data = json.loads(mp.read_text(encoding="utf-8"))
+                    results.append(ProjectMetadata.from_dict(data))
+                except (json.JSONDecodeError, KeyError):
+                    pass
+            return results
+
         for sub in sorted(self.projects_dir.iterdir()):
             if sub.is_dir():
                 mp = sub / _METADATA_FILENAME
@@ -135,9 +157,13 @@ class ProjectManager:
     # ------------------------------------------------------------------
 
     def _get_project_dir(self, name: str) -> Path:
+        if self.single_project:
+            return self.projects_dir
         return self.projects_dir / name
 
     def _get_metadata_path(self, name: str) -> Path:
+        if self.single_project:
+            return self.projects_dir / _METADATA_FILENAME
         return self._get_project_dir(name) / _METADATA_FILENAME
 
     def _read_metadata(self, name: str) -> Dict[str, Any]:

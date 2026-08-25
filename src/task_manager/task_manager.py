@@ -24,10 +24,14 @@ class TaskManager:
         next_up = tm.get_next_task()
     """
 
-    def __init__(self, project_name: str, projects_dir: str = "projects") -> None:
+    def __init__(self, project_name: str, projects_dir: str = "projects", single_project: bool = False) -> None:
         self.project_name = project_name
-        base = Path(projects_dir)
-        self.tasks_dir = base / project_name / "tasks"
+        self.single_project = single_project
+        if single_project:
+            self.tasks_dir = Path(projects_dir).resolve() / "tasks"
+        else:
+            base = Path(projects_dir)
+            self.tasks_dir = base / project_name / "tasks"
         self.tasks_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------

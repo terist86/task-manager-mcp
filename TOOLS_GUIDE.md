@@ -2,7 +2,9 @@
 
 ## Architecture
 
-The server stores data in a directory-based structure under `projects/`:
+The server supports two storage layouts, selected by the `TRANSPORT` environment variable:
+
+### SSE (default) — multi-project
 
 ```
 projects/
@@ -12,6 +14,19 @@ projects/
       T-001.json              # Individual task file (JSON format)
       T-002.json
 ```
+
+### Stdio — single-project
+
+In stdio mode the current working directory is treated as a single project:
+
+```
+./project.json              # Project metadata
+./tasks/
+  T-001.json                # Individual task file
+  T-002.json
+```
+
+The `project_name` tool parameter is accepted for compatibility but ignored in this mode.
 
 Source code is modularized under `src/task_manager/`:
 
