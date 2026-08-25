@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.mcpserver import MCPServer, Context
 from dotenv import load_dotenv
 
 from task_manager import ProjectManager, TaskManager, MigrationTool, TaskData
@@ -26,12 +26,13 @@ load_dotenv()
 # MCP factory
 # ---------------------------------------------------------------------------
 
-def create_mcp() -> FastMCP:
-    """Create a configured ``FastMCP`` instance with all tools registered."""
-    mcp = FastMCP(
-        "TASK MANAGER",
-        host=os.getenv("HOST", "0.0.0.0"),
-        port=int(os.getenv("PORT", "8050")),
+def create_mcp() -> MCPServer:
+    """Create a configured ``MCPServer`` instance with all tools registered."""
+    mcp = MCPServer(
+        name="TASK MANAGER",
+        title="Task Manager MCP Server",
+        description="MCP server for multi-project task management.",
+        version="0.1.0",
     )
 
     pm = ProjectManager("projects")
@@ -829,7 +830,10 @@ async def main() -> None:
     mcp = create_mcp()
     transport = os.getenv("TRANSPORT", "sse")
     if transport == "sse":
-        await mcp.run_sse_async()
+        await mcp.run_sse_async(
+            host=os.getenv("HOST", "0.0.0.0"),
+            port=int(os.getenv("PORT", "8050")),
+        )
     else:
         await mcp.run_stdio_async()
 
